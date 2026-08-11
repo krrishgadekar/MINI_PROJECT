@@ -1,0 +1,16 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "creditflow"
+version = "1.0.0"
+description = "Graph-Theoretic Debt Settlement & Credit-Risk Analysis — SPIT Sem V Mini Project"
+requires-python = ">=3.10"

@@ -6,6 +6,10 @@ import Dashboard from "./pages/Dashboard";
 import Debts from "./pages/Debts";
 import Settlement from "./pages/Settlement";
 import Risk from "./pages/Risk";
+import Profile from "./pages/Profile";
+import Settings from "./pages/Settings";
+import Documentation from "./pages/Documentation";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 
 /**
  * App — Root component with routing.
@@ -71,6 +75,10 @@ export default function App() {
           <Route path="debts" element={<Debts />} />
           <Route path="settlement" element={<Settlement />} />
           <Route path="risk" element={<Risk />} />
+          <Route path="profile" element={<Profile />} />
+          <Route path="settings" element={<Settings />} />
+          <Route path="docs" element={<Documentation />} />
+          <Route path="privacy-policy" element={<PrivacyPolicy />} />
         </Route>
 
         {/* Catch-all redirect */}

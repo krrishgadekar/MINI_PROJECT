@@ -5,6 +5,7 @@ import {
   GitBranch,
   ShieldAlert,
   LogOut,
+  Settings,
 } from "lucide-react";
 
 const navItems = [
@@ -12,6 +13,7 @@ const navItems = [
   { to: "/debts", icon: Receipt, label: "Debts" },
   { to: "/settlement", icon: GitBranch, label: "Settlement" },
   { to: "/risk", icon: ShieldAlert, label: "Risk Analysis" },
+  { to: "/settings", icon: Settings, label: "Settings" },
 ];
 
 /**
@@ -66,11 +68,15 @@ export default function Sidebar() {
 
       {/* User Footer */}
       <div className="sidebar-footer">
-        <div className="sidebar-user">
+        <div 
+          className="sidebar-user sidebar-user-link" 
+          onClick={() => navigate("/profile")}
+        >
           <div className="sidebar-avatar">PG</div>
           <div className="sidebar-user-info">
             <div className="sidebar-user-name">Parth Goggi</div>
-            <div className="sidebar-user-role">Frontend Developer</div>
+            <div className="sidebar-user-role">Software Developer</div>
+            <div className="sidebar-user-view">View Profile</div>
           </div>
         </div>
       </div>

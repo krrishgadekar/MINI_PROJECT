@@ -292,6 +292,37 @@ a:hover {
   gap: 10px;
 }
 
+.sidebar-user-link {
+  cursor: pointer;
+  padding: 8px;
+  margin: -8px;
+  border-radius: var(--border-radius-sm);
+  transition: background var(--transition-fast);
+}
+
+.sidebar-user-link:hover {
+  background: var(--accent-subtle);
+}
+
+.sidebar-user-view {
+  font-size: 0.65rem;
+  color: var(--accent);
+  font-weight: 600;
+  opacity: 0;
+  height: 0;
+  transform: translateY(-4px);
+  transition: all var(--transition-fast);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.sidebar-user-link:hover .sidebar-user-view {
+  opacity: 1;
+  height: auto;
+  margin-top: 4px;
+  transform: translateY(0);
+}
+
 .sidebar-avatar {
   width: 34px;
   height: 34px;

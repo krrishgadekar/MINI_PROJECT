@@ -3,6 +3,7 @@ import { Users, Receipt, TrendingDown, RefreshCw } from "lucide-react";
 import StatCard from "../components/StatCard";
 import GraphVisualizer from "../components/GraphVisualizer";
 import RiskBadge from "../components/RiskBadge";
+import Footer from "../components/Footer";
 import {
   seedData,
   totalDebtVolume,
@@ -288,6 +289,10 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      <div style={{ margin: '40px -28px -28px -28px' }}>
+        <Footer />
+      </div>
     </div>
   );
 }

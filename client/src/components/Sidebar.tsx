@@ -6,6 +6,7 @@ import {
   ShieldAlert,
   LogOut,
   Settings,
+  Sparkles,
 } from "lucide-react";
 
 const navItems = [
@@ -16,9 +17,6 @@ const navItems = [
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
 
-/**
- * Sidebar — Navigation sidebar with brand header and user footer.
- */
 export default function Sidebar() {
   const navigate = useNavigate();
 
@@ -31,10 +29,12 @@ export default function Sidebar() {
     <nav className="sidebar">
       {/* Brand */}
       <div className="sidebar-brand">
-        <div className="sidebar-brand-icon">C</div>
+        <div className="sidebar-brand-icon">
+          <Sparkles size={18} />
+        </div>
         <div className="sidebar-brand-text">
           <h1>CreditFlow</h1>
-          <p>Debt Settlement Engine</p>
+          <p>Smart Settlements</p>
         </div>
       </div>
 
@@ -68,8 +68,8 @@ export default function Sidebar() {
 
       {/* User Footer */}
       <div className="sidebar-footer">
-        <div 
-          className="sidebar-user sidebar-user-link" 
+        <div
+          className="sidebar-user sidebar-user-link"
           onClick={() => navigate("/profile")}
         >
           <div className="sidebar-avatar">PG</div>

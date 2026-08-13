@@ -1,12 +1,9 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { LogIn } from "lucide-react";
+import { ArrowRight, Sparkles } from "lucide-react";
 
 /**
- * Login — JWT login page.
- *
- * Currently uses mock auth (stores a fake token in localStorage).
- * Will be wired to Chetan's POST /api/auth/login when available.
+ * Login — Beautiful auth page with animated gradient orbs.
  */
 export default function Login() {
   const navigate = useNavigate();
@@ -25,12 +22,7 @@ export default function Login() {
     }
 
     setLoading(true);
-
-    // --- Mock auth (replace with Chetan's API later) ---
-    // Simulate a network request
     await new Promise((resolve) => setTimeout(resolve, 600));
-
-    // Accept any credentials for now
     const fakeToken = btoa(JSON.stringify({ email, iat: Date.now() }));
     localStorage.setItem("creditflow_token", fakeToken);
     setLoading(false);
@@ -39,11 +31,26 @@ export default function Login() {
 
   return (
     <div className="auth-page">
-      <div className="auth-card animate-fade-in-up">
+      {/* Extra floating orb */}
+      <div style={{
+        position: 'absolute',
+        top: '50%',
+        left: '60%',
+        width: 300,
+        height: 300,
+        background: 'radial-gradient(circle, rgba(6, 182, 212, 0.08) 0%, transparent 70%)',
+        borderRadius: '50%',
+        animation: 'floatOrb2 20s ease-in-out infinite reverse',
+        zIndex: 0,
+      }} />
+
+      <div className="auth-card">
         <div className="auth-brand">
-          <div className="auth-brand-icon">C</div>
+          <div className="auth-brand-icon">
+            <Sparkles size={24} />
+          </div>
           <h1>CreditFlow</h1>
-          <p>Graph-Theoretic Debt Settlement Engine</p>
+          <p>Smart debt settlement for merchant networks</p>
         </div>
 
         <form onSubmit={handleSubmit}>
@@ -55,7 +62,7 @@ export default function Login() {
               id="login-email"
               className="form-input"
               type="email"
-              placeholder="parth@spit.ac.in"
+              placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               autoFocus
@@ -70,20 +77,22 @@ export default function Login() {
               id="login-password"
               className="form-input"
               type="password"
-              placeholder="••••••••"
+              placeholder="Enter your password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
 
           {error && (
-            <div
-              style={{
-                color: "var(--risk-critical)",
-                fontSize: "var(--font-size-sm)",
-                marginBottom: 14,
-              }}
-            >
+            <div style={{
+              color: "var(--risk-critical)",
+              fontSize: "var(--font-size-sm)",
+              marginBottom: 14,
+              padding: '10px 14px',
+              background: 'var(--risk-critical-bg)',
+              borderRadius: 'var(--border-radius-sm)',
+              border: '1px solid rgba(248, 113, 113, 0.2)',
+            }}>
               {error}
             </div>
           )}
@@ -91,17 +100,22 @@ export default function Login() {
           <button
             type="submit"
             className="btn btn-primary btn-lg"
-            style={{ width: "100%" }}
+            style={{ width: "100%", marginTop: 4 }}
             disabled={loading}
           >
-            <LogIn size={18} />
-            {loading ? "Signing in..." : "Sign In"}
+            {loading ? (
+              "Signing in..."
+            ) : (
+              <>
+                Get Started <ArrowRight size={18} />
+              </>
+            )}
           </button>
         </form>
 
         <div className="auth-footer">
-          Don't have an account?{" "}
-          <Link to="/register">Create one</Link>
+          New here?{" "}
+          <Link to="/register">Create an account</Link>
         </div>
       </div>
     </div>

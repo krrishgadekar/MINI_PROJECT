@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Users, Receipt, TrendingDown, RefreshCw } from "lucide-react";
+import { Users, Receipt, TrendingDown, RefreshCw, Sparkles } from "lucide-react";
 import StatCard from "../components/StatCard";
 import GraphVisualizer from "../components/GraphVisualizer";
 import RiskBadge from "../components/RiskBadge";
@@ -21,17 +21,12 @@ import {
 } from "recharts";
 
 const RISK_COLORS: Record<string, string> = {
-  LOW: "#22c55e",
-  MEDIUM: "#f59e0b",
-  HIGH: "#f97316",
-  CRITICAL: "#ef4444",
+  LOW: "#34d399",
+  MEDIUM: "#fbbf24",
+  HIGH: "#fb923c",
+  CRITICAL: "#f87171",
 };
 
-/**
- * Dashboard — Overview page with stat cards, interactive graph, and risk chart.
- *
- * Uses seed_data.json for all data until Chetan's backend is ready.
- */
 export default function Dashboard() {
   const riskScores = useMemo(() => computeMockRiskScores(), []);
   const cycles = useMemo(() => detectMockCycles(), []);
@@ -48,45 +43,56 @@ export default function Dashboard() {
 
   return (
     <div className="animate-fade-in">
-      {/* Page Header */}
-      <div className="page-header">
-        <h2>Dashboard</h2>
-        <p>
-          {seedData.scenario_name} — {seedData.merchants.length} merchants in
-          network
+      {/* Welcome Banner */}
+      <div className="welcome-banner" style={{ marginBottom: 28 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
+          <Sparkles size={22} color="var(--accent-light)" />
+          <h2 style={{
+            fontSize: 'var(--font-size-xl)',
+            fontWeight: 700,
+            background: 'var(--accent-gradient-text)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          }}>
+            Welcome to CreditFlow
+          </h2>
+        </div>
+        <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-muted)', maxWidth: 550 }}>
+          Your smart dashboard for managing merchant debts, finding the fastest settlement paths, 
+          and monitoring payment reliability across your network.
         </p>
       </div>
 
       {/* Stat Cards */}
       <div className="stats-grid stagger-children">
         <StatCard
-          label="Total Merchants"
+          label="Merchants"
           value={seedData.merchants.length}
-          icon={<Users size={20} color="#6366f1" />}
-          iconBg="rgba(99, 102, 241, 0.12)"
+          icon={<Users size={20} color="#7c3aed" />}
+          iconBg="rgba(124, 58, 237, 0.12)"
           subtitle="Active in network"
         />
         <StatCard
           label="Active Debts"
           value={seedData.debts.length}
-          icon={<Receipt size={20} color="#f59e0b" />}
-          iconBg="rgba(245, 158, 11, 0.12)"
-          subtitle="Pending settlement"
+          icon={<Receipt size={20} color="#fbbf24" />}
+          iconBg="rgba(251, 191, 36, 0.12)"
+          subtitle="Waiting to be settled"
         />
         <StatCard
-          label="Total Debt Volume"
-          value={`₹${(totalDebtVolume / 1000).toFixed(0)}K`}
-          icon={<TrendingDown size={20} color="#ef4444" />}
-          iconBg="rgba(239, 68, 68, 0.12)"
-          subtitle={`₹${totalDebtVolume.toLocaleString("en-IN")} total`}
+          label="Total Volume"
+          value={`\u20B9${(totalDebtVolume / 1000).toFixed(0)}K`}
+          icon={<TrendingDown size={20} color="#f87171" />}
+          iconBg="rgba(248, 113, 113, 0.12)"
+          subtitle={`\u20B9${totalDebtVolume.toLocaleString("en-IN")} total`}
         />
         <StatCard
-          label="Circular Debt Cycles"
+          label="Circular Debts"
           value={cycles.cycles.length}
-          icon={<RefreshCw size={20} color="#22c55e" />}
-          iconBg="rgba(34, 197, 94, 0.12)"
+          icon={<RefreshCw size={20} color="#34d399" />}
+          iconBg="rgba(52, 211, 153, 0.12)"
           subtitle={
-            cycles.has_cycle ? "Netting opportunity detected" : "No cycles found"
+            cycles.has_cycle ? "Can be canceled automatically" : "No loops found"
           }
         />
       </div>
@@ -102,18 +108,18 @@ export default function Dashboard() {
       >
         {/* Graph Visualizer */}
         <div className="glass-card" style={{ padding: 0, overflow: "hidden" }}>
-          <div style={{ padding: "18px 22px 10px" }}>
+          <div style={{ padding: "20px 24px 10px" }}>
             <h3
               style={{
                 fontSize: "var(--font-size-md)",
-                fontWeight: 600,
-                marginBottom: 2,
+                fontWeight: 700,
+                marginBottom: 4,
               }}
             >
-              Merchant Debt Network
+              Debt Network Map
             </h3>
             <p style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
-              Click a node to run BFS and highlight reachable merchants
+              Click any merchant to see who they owe money to
             </p>
           </div>
           <GraphVisualizer
@@ -129,11 +135,11 @@ export default function Dashboard() {
           <h3
             style={{
               fontSize: "var(--font-size-md)",
-              fontWeight: 600,
+              fontWeight: 700,
               marginBottom: 18,
             }}
           >
-            Risk Overview
+            Payment Reliability
           </h3>
 
           {/* Risk Bar Chart */}
@@ -162,19 +168,20 @@ export default function Dashboard() {
                 />
                 <Tooltip
                   contentStyle={{
-                    background: "#111827",
-                    border: "1px solid rgba(99,102,241,0.2)",
-                    borderRadius: 8,
+                    background: "rgba(10, 17, 40, 0.95)",
+                    border: "1px solid rgba(124, 58, 237, 0.2)",
+                    borderRadius: 10,
                     fontSize: 12,
                     color: "#f1f5f9",
+                    backdropFilter: 'blur(10px)',
                   }}
-                  formatter={(value: number) => [`${value}%`, "Risk Score"]}
+                  formatter={(value: number) => [`${value}%`, "Risk Level"]}
                 />
-                <Bar dataKey="risk" radius={[0, 4, 4, 0]} barSize={16}>
+                <Bar dataKey="risk" radius={[0, 6, 6, 0]} barSize={14}>
                   {riskChartData.map((entry, index) => (
                     <Cell
                       key={`cell-${index}`}
-                      fill={RISK_COLORS[entry.category] || "#6366f1"}
+                      fill={RISK_COLORS[entry.category] || "#7c3aed"}
                     />
                   ))}
                 </Bar>
@@ -191,27 +198,19 @@ export default function Dashboard() {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  padding: "8px 0",
+                  padding: "10px 0",
                   borderBottom: "1px solid var(--border-secondary)",
                 }}
               >
-                <span
-                  style={{
-                    fontSize: "var(--font-size-sm)",
-                    color: "var(--text-secondary)",
-                  }}
-                >
+                <span style={{ fontSize: "var(--font-size-sm)", color: "var(--text-secondary)" }}>
                   {r.merchant_id.replace("_", " ")}
                 </span>
                 <RiskBadge category={r.risk_category} />
               </div>
             ))}
 
-            {/* Merchants without risk data */}
             {seedData.merchants
-              .filter(
-                (m) => !riskScores.find((r) => r.merchant_id === m)
-              )
+              .filter((m) => !riskScores.find((r) => r.merchant_id === m))
               .slice(0, 3)
               .map((m) => (
                 <div
@@ -220,25 +219,15 @@ export default function Dashboard() {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
-                    padding: "8px 0",
+                    padding: "10px 0",
                     borderBottom: "1px solid var(--border-secondary)",
                   }}
                 >
-                  <span
-                    style={{
-                      fontSize: "var(--font-size-sm)",
-                      color: "var(--text-muted)",
-                    }}
-                  >
+                  <span style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)" }}>
                     {m.replace("_", " ")}
                   </span>
-                  <span
-                    style={{
-                      fontSize: "var(--font-size-xs)",
-                      color: "var(--text-muted)",
-                    }}
-                  >
-                    No data
+                  <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
+                    No data yet
                   </span>
                 </div>
               ))}
@@ -248,25 +237,13 @@ export default function Dashboard() {
 
       {/* Detected Cycles */}
       {cycles.has_cycle && (
-        <div className="glass-card">
-          <h3
-            style={{
-              fontSize: "var(--font-size-md)",
-              fontWeight: 600,
-              marginBottom: 14,
-            }}
-          >
-            Detected Circular Debt Cycles
+        <div className="glass-card animate-fade-in-up">
+          <h3 style={{ fontSize: "var(--font-size-md)", fontWeight: 700, marginBottom: 8 }}>
+            Circular Debts Found
           </h3>
-          <p
-            style={{
-              fontSize: "var(--font-size-sm)",
-              color: "var(--text-muted)",
-              marginBottom: 16,
-            }}
-          >
-            These cycles can be netted to reduce total transactions without any
-            money moving.
+          <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)", marginBottom: 16 }}>
+            These are loops where merchants owe each other in a circle. They can be canceled 
+            out automatically without any money changing hands.
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
             {cycles.cycles.map((cycle, i) => (
@@ -276,13 +253,13 @@ export default function Dashboard() {
                   background: "var(--bg-tertiary)",
                   border: "1px solid var(--border-primary)",
                   borderRadius: "var(--border-radius-sm)",
-                  padding: "10px 16px",
+                  padding: "12px 18px",
                   fontSize: "var(--font-size-sm)",
                   color: "var(--text-accent)",
                   fontWeight: 500,
                 }}
               >
-                {cycle.map((m) => m.replace("_", " ")).join(" → ")} →{" "}
+                {cycle.map((m) => m.replace("_", " ")).join(" \u2192 ")} \u2192{" "}
                 {cycle[0].replace("_", " ")}
               </div>
             ))}
@@ -290,7 +267,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div style={{ margin: '40px -28px -28px -28px' }}>
+      <div style={{ margin: '40px -32px -32px -32px' }}>
         <Footer />
       </div>
     </div>

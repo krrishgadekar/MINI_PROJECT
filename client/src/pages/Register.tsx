@@ -1,19 +1,16 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { UserPlus } from "lucide-react";
+import { ArrowRight, Sparkles } from "lucide-react";
 
 /**
- * Register — Registration page.
- *
- * Currently uses mock auth. Will be wired to Chetan's
- * POST /api/auth/register when available.
+ * Register — Account creation page.
  */
 export default function Register() {
   const navigate = useNavigate();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -21,27 +18,22 @@ export default function Register() {
     e.preventDefault();
     setError("");
 
-    if (!name || !email || !password) {
+    if (!name || !email || !password || !confirm) {
       setError("Please fill in all fields.");
       return;
     }
-
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.");
+    if (password !== confirm) {
+      setError("Passwords don't match.");
       return;
     }
-
     if (password.length < 6) {
       setError("Password must be at least 6 characters.");
       return;
     }
 
     setLoading(true);
-
-    // --- Mock registration ---
-    await new Promise((resolve) => setTimeout(resolve, 600));
-
-    const fakeToken = btoa(JSON.stringify({ name, email, iat: Date.now() }));
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    const fakeToken = btoa(JSON.stringify({ email, name, iat: Date.now() }));
     localStorage.setItem("creditflow_token", fakeToken);
     setLoading(false);
     navigate("/");
@@ -49,23 +41,35 @@ export default function Register() {
 
   return (
     <div className="auth-page">
-      <div className="auth-card animate-fade-in-up">
+      <div style={{
+        position: 'absolute',
+        top: '60%',
+        left: '20%',
+        width: 350,
+        height: 350,
+        background: 'radial-gradient(circle, rgba(6, 182, 212, 0.06) 0%, transparent 70%)',
+        borderRadius: '50%',
+        animation: 'floatOrb1 22s ease-in-out infinite reverse',
+        zIndex: 0,
+      }} />
+
+      <div className="auth-card">
         <div className="auth-brand">
-          <div className="auth-brand-icon">C</div>
-          <h1>Create Account</h1>
-          <p>Join the CreditFlow merchant network</p>
+          <div className="auth-brand-icon">
+            <Sparkles size={24} />
+          </div>
+          <h1>Join CreditFlow</h1>
+          <p>Create your account to get started</p>
         </div>
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label className="form-label" htmlFor="register-name">
-              Full Name
-            </label>
+            <label className="form-label" htmlFor="reg-name">Full Name</label>
             <input
-              id="register-name"
+              id="reg-name"
               className="form-input"
               type="text"
-              placeholder="Parth Goggi"
+              placeholder="Your full name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               autoFocus
@@ -73,55 +77,51 @@ export default function Register() {
           </div>
 
           <div className="form-group">
-            <label className="form-label" htmlFor="register-email">
-              Email Address
-            </label>
+            <label className="form-label" htmlFor="reg-email">Email Address</label>
             <input
-              id="register-email"
+              id="reg-email"
               className="form-input"
               type="email"
-              placeholder="parth@spit.ac.in"
+              placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
           </div>
 
           <div className="form-group">
-            <label className="form-label" htmlFor="register-password">
-              Password
-            </label>
+            <label className="form-label" htmlFor="reg-password">Password</label>
             <input
-              id="register-password"
+              id="reg-password"
               className="form-input"
               type="password"
-              placeholder="Min. 6 characters"
+              placeholder="At least 6 characters"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
 
           <div className="form-group">
-            <label className="form-label" htmlFor="register-confirm">
-              Confirm Password
-            </label>
+            <label className="form-label" htmlFor="reg-confirm">Confirm Password</label>
             <input
-              id="register-confirm"
+              id="reg-confirm"
               className="form-input"
               type="password"
-              placeholder="••••••••"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Re-enter your password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
             />
           </div>
 
           {error && (
-            <div
-              style={{
-                color: "var(--risk-critical)",
-                fontSize: "var(--font-size-sm)",
-                marginBottom: 14,
-              }}
-            >
+            <div style={{
+              color: "var(--risk-critical)",
+              fontSize: "var(--font-size-sm)",
+              marginBottom: 14,
+              padding: '10px 14px',
+              background: 'var(--risk-critical-bg)',
+              borderRadius: 'var(--border-radius-sm)',
+              border: '1px solid rgba(248, 113, 113, 0.2)',
+            }}>
               {error}
             </div>
           )}
@@ -129,11 +129,16 @@ export default function Register() {
           <button
             type="submit"
             className="btn btn-primary btn-lg"
-            style={{ width: "100%" }}
+            style={{ width: "100%", marginTop: 4 }}
             disabled={loading}
           >
-            <UserPlus size={18} />
-            {loading ? "Creating account..." : "Create Account"}
+            {loading ? (
+              "Creating account..."
+            ) : (
+              <>
+                Create Account <ArrowRight size={18} />
+              </>
+            )}
           </button>
         </form>
 

@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { ArrowRight, Zap, GitBranch } from "lucide-react";
+import { ArrowRight, Zap, RefreshCw } from "lucide-react";
 import TransactionList from "../components/TransactionList";
 import {
   seedData,
@@ -18,12 +18,6 @@ import {
   ReferenceLine,
 } from "recharts";
 
-/**
- * Settlement — Settlement computation page.
- *
- * Provides a "Compute Settlement" trigger, before/after comparison,
- * settlement transaction list, cycle detection panel, and net balances chart.
- */
 export default function Settlement() {
   const [settlement, setSettlement] = useState<SettlementResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -33,16 +27,13 @@ export default function Settlement() {
 
   const handleCompute = async () => {
     setLoading(true);
-    // Simulate API call delay
     await new Promise((resolve) => setTimeout(resolve, 800));
-
     const result = computeMockSettlement();
     setSettlement(result);
     setComputed(true);
     setLoading(false);
   };
 
-  // Net balances chart data
   const balanceChartData = useMemo(() => {
     if (!settlement) return [];
     return Object.entries(settlement.net_balances)
@@ -57,54 +48,52 @@ export default function Settlement() {
     <div className="animate-fade-in">
       {/* Page Header */}
       <div className="page-header">
-        <h2>Debt Settlement</h2>
-        <p>
-          Compute the minimum number of transactions to settle all debts using a
-          Greedy O(N log N) algorithm
-        </p>
+        <h2>Settle All Debts</h2>
+        <p>Find the smartest way to clear all debts with the fewest payments possible</p>
       </div>
 
       {/* Compute Button */}
       {!computed && (
         <div
           className="glass-card"
-          style={{ textAlign: "center", padding: "48px 24px" }}
+          style={{ textAlign: "center", padding: "56px 24px" }}
         >
-          <GitBranch
-            size={48}
-            color="var(--accent)"
-            style={{ marginBottom: 16 }}
-          />
-          <h3
-            style={{
-              fontSize: "var(--font-size-lg)",
-              fontWeight: 600,
-              marginBottom: 8,
-            }}
-          >
-            Ready to Settle
+          <div style={{
+            width: 72,
+            height: 72,
+            borderRadius: 20,
+            background: 'var(--accent-subtle)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 20px',
+          }}>
+            <Zap size={32} color="var(--accent-light)" />
+          </div>
+          <h3 style={{ fontSize: "var(--font-size-lg)", fontWeight: 700, marginBottom: 10 }}>
+            Ready to Optimize
           </h3>
-          <p
-            style={{
-              fontSize: "var(--font-size-sm)",
-              color: "var(--text-muted)",
-              marginBottom: 24,
-              maxWidth: 480,
-              marginLeft: "auto",
-              marginRight: "auto",
-            }}
-          >
-            The greedy algorithm will compute the minimum set of transactions
-            needed to clear all {seedData.debts.length} debts across{" "}
-            {seedData.merchants.length} merchants.
+          <p style={{
+            fontSize: "var(--font-size-sm)",
+            color: "var(--text-muted)",
+            marginBottom: 28,
+            maxWidth: 440,
+            marginLeft: "auto",
+            marginRight: "auto",
+            lineHeight: 1.7,
+          }}>
+            Our algorithm will analyze all {seedData.debts.length} debts between{" "}
+            {seedData.merchants.length} merchants and find the minimum number of 
+            payments needed to settle everything.
           </p>
           <button
             className="btn btn-primary btn-lg"
             onClick={handleCompute}
             disabled={loading}
+            style={{ padding: '16px 36px', fontSize: 'var(--font-size-md)' }}
           >
             <Zap size={20} />
-            {loading ? "Computing..." : "Compute Settlement"}
+            {loading ? "Calculating..." : "Find Best Settlement"}
           </button>
         </div>
       )}
@@ -115,36 +104,22 @@ export default function Settlement() {
           {/* Before / After Comparison */}
           <div className="comparison-grid stagger-children">
             <div className="glass-card comparison-card before">
-              <div className="comparison-label">Before (Original)</div>
+              <div className="comparison-label">Before</div>
               <div className="comparison-value">{seedData.debts.length}</div>
-              <div
-                style={{
-                  fontSize: "var(--font-size-sm)",
-                  color: "var(--text-muted)",
-                  marginTop: 4,
-                }}
-              >
-                transactions
+              <div style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)", marginTop: 4 }}>
+                payments needed
               </div>
             </div>
 
             <div className="comparison-arrow">
-              <ArrowRight size={32} />
+              <ArrowRight size={36} strokeWidth={2.5} />
             </div>
 
             <div className="glass-card comparison-card after">
-              <div className="comparison-label">After (Optimized)</div>
-              <div className="comparison-value">
-                {settlement.transaction_count}
-              </div>
-              <div
-                style={{
-                  fontSize: "var(--font-size-sm)",
-                  color: "var(--text-muted)",
-                  marginTop: 4,
-                }}
-              >
-                transactions
+              <div className="comparison-label">After</div>
+              <div className="comparison-value">{settlement.transaction_count}</div>
+              <div style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)", marginTop: 4 }}>
+                payments needed
               </div>
             </div>
           </div>
@@ -155,102 +130,40 @@ export default function Settlement() {
             style={{
               textAlign: "center",
               marginBottom: 20,
-              padding: "18px",
-              border: "1px solid rgba(34, 197, 94, 0.2)",
+              padding: "20px",
+              border: "1px solid rgba(52, 211, 153, 0.2)",
             }}
           >
-            <span
-              style={{
-                fontSize: "var(--font-size-sm)",
-                color: "var(--text-muted)",
-              }}
-            >
-              Reduction:{" "}
-            </span>
-            <span
-              style={{
-                fontSize: "var(--font-size-lg)",
-                fontWeight: 700,
-                color: "var(--risk-low)",
-              }}
-            >
+            <span style={{ fontSize: "var(--font-size-2xl)", fontWeight: 800, color: "var(--risk-low)" }}>
               {Math.round(
-                ((seedData.debts.length - settlement.transaction_count) /
-                  seedData.debts.length) *
-                  100
-              )}
-              % fewer transactions
+                ((seedData.debts.length - settlement.transaction_count) / seedData.debts.length) * 100
+              )}% fewer payments
             </span>
-            <span
-              style={{
-                fontSize: "var(--font-size-sm)",
-                color: "var(--text-muted)",
-                marginLeft: 12,
-              }}
-            >
-              | Total settled: ₹
-              {settlement.total_amount_settled.toLocaleString("en-IN")}
-            </span>
-            <span
-              style={{
-                fontSize: "var(--font-size-xs)",
-                color: "var(--text-muted)",
-                marginLeft: 12,
-              }}
-            >
-              | Algorithm: {settlement.algorithm}
+            <span style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)", marginLeft: 16 }}>
+              Total settled: {"\u20B9"}{settlement.total_amount_settled.toLocaleString("en-IN")}
             </span>
           </div>
 
           {/* Two columns: Transactions + Net Balances */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: 18,
-              marginBottom: 20,
-            }}
-          >
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginBottom: 20 }}>
             {/* Settlement Transactions */}
             <div className="glass-card">
-              <h3
-                style={{
-                  fontSize: "var(--font-size-md)",
-                  fontWeight: 600,
-                  marginBottom: 14,
-                }}
-              >
-                Settlement Transactions
+              <h3 style={{ fontSize: "var(--font-size-md)", fontWeight: 700, marginBottom: 14 }}>
+                Who Pays Whom
               </h3>
               <TransactionList transactions={settlement.transactions} />
             </div>
 
             {/* Net Balances Chart */}
             <div className="glass-card">
-              <h3
-                style={{
-                  fontSize: "var(--font-size-md)",
-                  fontWeight: 600,
-                  marginBottom: 14,
-                }}
-              >
-                Net Balances
+              <h3 style={{ fontSize: "var(--font-size-md)", fontWeight: 700, marginBottom: 8 }}>
+                Balance Summary
               </h3>
-              <p
-                style={{
-                  fontSize: "var(--font-size-xs)",
-                  color: "var(--text-muted)",
-                  marginBottom: 16,
-                }}
-              >
-                Positive = net creditor (owed money) · Negative = net debtor
-                (owes money)
+              <p style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", marginBottom: 16 }}>
+                Green = is owed money · Red = owes money
               </p>
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart
-                  data={balanceChartData}
-                  margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
-                >
+                <BarChart data={balanceChartData} margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
                   <XAxis
                     dataKey="name"
                     tick={{ fill: "#94a3b8", fontSize: 10 }}
@@ -265,29 +178,29 @@ export default function Settlement() {
                     axisLine={false}
                     tickLine={false}
                     tickFormatter={(v) =>
-                      `₹${Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}K` : v}`
+                      `\u20B9${Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}K` : v}`
                     }
                   />
                   <Tooltip
                     contentStyle={{
-                      background: "#111827",
-                      border: "1px solid rgba(99,102,241,0.2)",
-                      borderRadius: 8,
+                      background: "rgba(10, 17, 40, 0.95)",
+                      border: "1px solid rgba(124, 58, 237, 0.2)",
+                      borderRadius: 10,
                       fontSize: 12,
                       color: "#f1f5f9",
                     }}
                     formatter={(value: number) => [
-                      `₹${value.toLocaleString("en-IN")}`,
+                      `\u20B9${value.toLocaleString("en-IN")}`,
                       "Net Balance",
                     ]}
                   />
                   <ReferenceLine y={0} stroke="#334155" strokeDasharray="3 3" />
-                  <Bar dataKey="balance" radius={[4, 4, 0, 0]} barSize={28}>
+                  <Bar dataKey="balance" radius={[6, 6, 0, 0]} barSize={28}>
                     {balanceChartData.map((entry, index) => (
                       <Cell
                         key={`cell-${index}`}
-                        fill={entry.balance >= 0 ? "#22c55e" : "#ef4444"}
-                        fillOpacity={0.8}
+                        fill={entry.balance >= 0 ? "#34d399" : "#f87171"}
+                        fillOpacity={0.85}
                       />
                     ))}
                   </Bar>
@@ -299,24 +212,11 @@ export default function Settlement() {
           {/* Cycle Detection */}
           {cycles.has_cycle && (
             <div className="glass-card">
-              <h3
-                style={{
-                  fontSize: "var(--font-size-md)",
-                  fontWeight: 600,
-                  marginBottom: 8,
-                }}
-              >
-                Detected Circular Debt Cycles
+              <h3 style={{ fontSize: "var(--font-size-md)", fontWeight: 700, marginBottom: 8 }}>
+                Circular Debts Found
               </h3>
-              <p
-                style={{
-                  fontSize: "var(--font-size-sm)",
-                  color: "var(--text-muted)",
-                  marginBottom: 16,
-                }}
-              >
-                These cycles were detected using DFS O(V+E). They can be netted
-                before settlement to further reduce transactions.
+              <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)", marginBottom: 16 }}>
+                These are debts that go in a circle and can be canceled out before settling.
               </p>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
                 {cycles.cycles.map((cycle, i) => (
@@ -329,22 +229,14 @@ export default function Settlement() {
                       background: "var(--bg-tertiary)",
                       border: "1px solid var(--border-primary)",
                       borderRadius: "var(--border-radius-sm)",
-                      padding: "10px 16px",
+                      padding: "12px 18px",
                     }}
                   >
-                    <span
-                      style={{
-                        fontSize: "var(--font-size-sm)",
-                        color: "var(--text-accent)",
-                        fontWeight: 500,
-                      }}
-                    >
-                      {cycle.map((m) => m.replace("_", " ")).join(" → ")} →{" "}
+                    <span style={{ fontSize: "var(--font-size-sm)", color: "var(--text-accent)", fontWeight: 500 }}>
+                      {cycle.map((m) => m.replace("_", " ")).join(" \u2192 ")} \u2192{" "}
                       {cycle[0].replace("_", " ")}
                     </span>
-                    <button className="btn btn-secondary btn-sm">
-                      Net Cycle
-                    </button>
+                    <button className="btn btn-secondary btn-sm">Cancel Loop</button>
                   </div>
                 ))}
               </div>
@@ -352,9 +244,9 @@ export default function Settlement() {
           )}
 
           {/* Recompute */}
-          <div style={{ textAlign: "center", marginTop: 20 }}>
+          <div style={{ textAlign: "center", marginTop: 24 }}>
             <button className="btn btn-secondary" onClick={handleCompute}>
-              <Zap size={16} /> Recompute Settlement
+              <RefreshCw size={16} /> Recalculate
             </button>
           </div>
         </>

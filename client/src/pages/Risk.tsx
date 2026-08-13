@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { computeMockRiskScores, seedData } from "../data/seedData";
 import RiskBadge from "../components/RiskBadge";
 import type { RiskScoreResponse } from "../types";
-import { ShieldAlert, X, AlertTriangle, Info } from "lucide-react";
+import { ShieldAlert, X, TrendingUp, AlertTriangle } from "lucide-react";
 import {
   PieChart,
   Pie,
@@ -12,51 +12,46 @@ import {
 } from "recharts";
 
 const RISK_COLORS: Record<string, string> = {
-  LOW: "#22c55e",
-  MEDIUM: "#f59e0b",
-  HIGH: "#f97316",
-  CRITICAL: "#ef4444",
+  LOW: "#34d399",
+  MEDIUM: "#fbbf24",
+  HIGH: "#fb923c",
+  CRITICAL: "#f87171",
 };
 
-/**
- * Risk — Risk Analysis dashboard.
- *
- * Displays portfolio summary (average risk gauge), merchant risk table
- * with drill-down panel showing lambda, risk_score, and Poisson model details.
- */
+const RISK_LABELS: Record<string, string> = {
+  LOW: "Reliable",
+  MEDIUM: "Needs Watching",
+  HIGH: "Risky",
+  CRITICAL: "Very Risky",
+};
+
 export default function Risk() {
   const riskScores = useMemo(() => computeMockRiskScores(), []);
   const [selectedMerchant, setSelectedMerchant] = useState<RiskScoreResponse | null>(null);
 
   const portfolioAverage = useMemo(() => {
     if (riskScores.length === 0) return 0;
-    return (
-      riskScores.reduce((sum, r) => sum + r.risk_score, 0) / riskScores.length
-    );
+    return riskScores.reduce((sum, r) => sum + r.risk_score, 0) / riskScores.length;
   }, [riskScores]);
 
-  // Category distribution for pie chart
   const categoryDist = useMemo(() => {
     const counts: Record<string, number> = { LOW: 0, MEDIUM: 0, HIGH: 0, CRITICAL: 0 };
     riskScores.forEach((r) => {
       counts[r.risk_category] = (counts[r.risk_category] || 0) + 1;
     });
 
-    // Also count merchants without risk data as "UNKNOWN"
-    const noDataCount =
-      seedData.merchants.length -
-      riskScores.length;
+    const noDataCount = seedData.merchants.length - riskScores.length;
 
     const data = Object.entries(counts)
       .filter(([, v]) => v > 0)
       .map(([cat, count]) => ({
-        name: cat,
+        name: RISK_LABELS[cat] || cat,
         value: count,
         color: RISK_COLORS[cat],
       }));
 
     if (noDataCount > 0) {
-      data.push({ name: "NO DATA", value: noDataCount, color: "#334155" });
+      data.push({ name: "No Data", value: noDataCount, color: "#334155" });
     }
 
     return data;
@@ -67,100 +62,69 @@ export default function Risk() {
       {/* Page Header */}
       <div className="page-header">
         <h2>Risk Analysis</h2>
-        <p>
-          Poisson-based credit risk scoring — P(X≥1) = 1 - e<sup>-λ</sup>
-        </p>
+        <p>See how reliable each merchant is based on their payment history</p>
       </div>
 
       {/* Summary Cards */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr 280px",
-          gap: 18,
-          marginBottom: 24,
-        }}
-      >
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 300px", gap: 18, marginBottom: 24 }}>
         {/* Portfolio Average */}
         <div className="glass-card" style={{ textAlign: "center" }}>
-          <div
-            style={{
-              fontSize: "var(--font-size-xs)",
-              textTransform: "uppercase",
-              color: "var(--text-muted)",
-              fontWeight: 600,
-              letterSpacing: "0.05em",
-              marginBottom: 10,
-            }}
-          >
-            Portfolio Average Risk
+          <div style={{
+            fontSize: "var(--font-size-xs)",
+            textTransform: "uppercase",
+            color: "var(--text-muted)",
+            fontWeight: 600,
+            letterSpacing: "0.06em",
+            marginBottom: 10,
+          }}>
+            Average Risk Level
           </div>
-          <div
-            style={{
-              fontSize: "3rem",
-              fontWeight: 700,
-              color:
-                portfolioAverage < 0.1
-                  ? "var(--risk-low)"
-                  : portfolioAverage < 0.3
-                  ? "var(--risk-medium)"
-                  : "var(--risk-high)",
-              letterSpacing: "-0.02em",
-            }}
-          >
+          <div style={{
+            fontSize: "3rem",
+            fontWeight: 800,
+            letterSpacing: "-0.04em",
+            color: portfolioAverage < 0.3 ? "var(--risk-low)" : portfolioAverage < 0.6 ? "var(--risk-high)" : "var(--risk-critical)",
+          }}>
             {(portfolioAverage * 100).toFixed(1)}%
           </div>
-          <div
-            style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)" }}
-          >
-            Across {riskScores.length} profiled merchants
+          <div style={{
+            fontSize: "var(--font-size-sm)",
+            color: "var(--text-muted)",
+            marginTop: 6,
+          }}>
+            across {riskScores.length} merchants with data
           </div>
         </div>
 
-        {/* Model Info */}
+        {/* How it works */}
         <div className="glass-card">
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-            <Info size={16} color="var(--accent)" />
-            <span style={{ fontSize: "var(--font-size-sm)", fontWeight: 600 }}>
-              Poisson Risk Model
-            </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+            <TrendingUp size={20} color="var(--accent-light)" />
+            <h3 style={{ fontSize: "var(--font-size-md)", fontWeight: 700 }}>How We Score Risk</h3>
           </div>
-          <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", lineHeight: 1.7 }}>
-            <p><strong>λ (lambda)</strong> = adverse events / months observed</p>
-            <p><strong>Risk Score</strong> = 1 - e<sup>-λ</sup> (probability of ≥1 adverse event)</p>
-            <p style={{ marginTop: 6 }}>
-              <strong>Thresholds:</strong> LOW &lt;10% · MEDIUM 10-30% · HIGH 30-60% · CRITICAL ≥60%
-            </p>
-            <p><strong>Cold start:</strong> λ = 0.05 prior for &lt;3 months data</p>
-          </div>
+          <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-secondary)", lineHeight: 1.7 }}>
+            We analyze each merchant's history of late payments and defaults. 
+            The more issues in their past, the higher their risk score. 
+            Merchants with very little history get a "new" rating until we have more data.
+          </p>
         </div>
 
-        {/* Category Distribution Pie */}
-        <div className="glass-card" style={{ padding: "14px" }}>
-          <div
-            style={{
-              fontSize: "var(--font-size-xs)",
-              textTransform: "uppercase",
-              color: "var(--text-muted)",
-              fontWeight: 600,
-              letterSpacing: "0.05em",
-              marginBottom: 4,
-              textAlign: "center",
-            }}
-          >
-            Category Distribution
-          </div>
-          <ResponsiveContainer width="100%" height={160}>
+        {/* Pie Chart */}
+        <div className="glass-card">
+          <h3 style={{ fontSize: "var(--font-size-sm)", fontWeight: 600, marginBottom: 8, color: "var(--text-muted)" }}>
+            MERCHANT BREAKDOWN
+          </h3>
+          <ResponsiveContainer width="100%" height={180}>
             <PieChart>
               <Pie
                 data={categoryDist}
                 cx="50%"
                 cy="50%"
-                innerRadius={42}
-                outerRadius={65}
+                innerRadius={50}
+                outerRadius={75}
+                paddingAngle={3}
                 dataKey="value"
                 stroke="none"
-                paddingAngle={3}
               >
                 {categoryDist.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.color} />
@@ -168,312 +132,204 @@ export default function Risk() {
               </Pie>
               <Tooltip
                 contentStyle={{
-                  background: "#111827",
-                  border: "1px solid rgba(99,102,241,0.2)",
-                  borderRadius: 8,
+                  background: "rgba(10, 17, 40, 0.95)",
+                  border: "1px solid rgba(124, 58, 237, 0.2)",
+                  borderRadius: 10,
                   fontSize: 12,
                   color: "#f1f5f9",
                 }}
+                formatter={(value: number, name: string) => [`${value} merchants`, name]}
               />
             </PieChart>
           </ResponsiveContainer>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              gap: 12,
-              flexWrap: "wrap",
-            }}
-          >
-            {categoryDist.map((c) => (
-              <span
-                key={c.name}
-                style={{
-                  fontSize: "var(--font-size-xs)",
-                  color: c.color,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 4,
-                }}
-              >
-                <span
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
-                    background: c.color,
-                    display: "inline-block",
-                  }}
-                />
-                {c.name} ({c.value})
-              </span>
+          <div style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: 12, marginTop: 4 }}>
+            {categoryDist.map((cat) => (
+              <div key={cat.name} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "var(--font-size-xs)" }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: cat.color }} />
+                <span style={{ color: "var(--text-muted)" }}>{cat.name}</span>
+              </div>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Merchant Risk Table + Drill-down */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: selectedMerchant ? "1fr 380px" : "1fr",
-          gap: 18,
-        }}
-      >
-        {/* Risk Table */}
-        <div className="glass-card">
-          <h3
-            style={{
-              fontSize: "var(--font-size-md)",
-              fontWeight: 600,
-              marginBottom: 14,
-            }}
-          >
-            Merchant Risk Profiles
+      {/* Merchant Risk Table */}
+      <div className="glass-card">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+          <h3 style={{ fontSize: "var(--font-size-md)", fontWeight: 700 }}>
+            Merchant Profiles
           </h3>
-          <div className="data-table-wrapper">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Merchant</th>
-                  <th>Risk Score</th>
-                  <th>Category</th>
-                  <th>λ Rate</th>
-                  <th>Months</th>
-                  <th>Late</th>
-                  <th>Defaults</th>
-                  <th>Cold Start</th>
-                </tr>
-              </thead>
-              <tbody>
-                {riskScores.map((r) => (
+          <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
+            Click a row for details
+          </span>
+        </div>
+
+        <div className="data-table-wrapper">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Merchant</th>
+                <th>Months Tracked</th>
+                <th>Late Payments</th>
+                <th>Defaults</th>
+                <th>Risk Level</th>
+                <th>Score</th>
+              </tr>
+            </thead>
+            <tbody>
+              {riskScores
+                .sort((a, b) => b.risk_score - a.risk_score)
+                .map((r) => (
                   <tr
                     key={r.merchant_id}
                     onClick={() => setSelectedMerchant(r)}
-                    style={{
-                      cursor: "pointer",
-                      background:
-                        selectedMerchant?.merchant_id === r.merchant_id
-                          ? "var(--accent-subtle)"
-                          : undefined,
-                    }}
+                    style={{ cursor: "pointer" }}
                   >
-                    <td>{r.merchant_id.replace("_", " ")}</td>
-                    <td
-                      style={{
-                        fontWeight: 600,
-                        fontVariantNumeric: "tabular-nums",
-                        color:
-                          RISK_COLORS[r.risk_category] || "var(--text-primary)",
-                      }}
-                    >
-                      {(r.risk_score * 100).toFixed(2)}%
-                    </td>
-                    <td>
-                      <RiskBadge category={r.risk_category} />
-                    </td>
-                    <td style={{ fontVariantNumeric: "tabular-nums" }}>
-                      {r.lambda_rate.toFixed(4)}
+                    <td style={{ fontWeight: 600 }}>
+                      {r.merchant_id.replace("_", " ")}
+                      {r.cold_start && (
+                        <span style={{
+                          fontSize: "var(--font-size-xs)",
+                          color: "var(--text-muted)",
+                          marginLeft: 8,
+                          background: "var(--bg-tertiary)",
+                          padding: "2px 8px",
+                          borderRadius: 4,
+                        }}>
+                          NEW
+                        </span>
+                      )}
                     </td>
                     <td>{r.months_observed}</td>
-                    <td>{r.late_payment_events}</td>
-                    <td>
-                      {r.default_events > 0 ? (
-                        <span style={{ color: "var(--risk-critical)", fontWeight: 600 }}>
-                          {r.default_events}
-                        </span>
-                      ) : (
-                        <span style={{ color: "var(--text-muted)" }}>0</span>
-                      )}
+                    <td style={{ color: r.late_payment_events > 0 ? "var(--risk-medium)" : "var(--text-muted)" }}>
+                      {r.late_payment_events}
                     </td>
+                    <td style={{ color: r.default_events > 0 ? "var(--risk-critical)" : "var(--text-muted)" }}>
+                      {r.default_events}
+                    </td>
+                    <td><RiskBadge category={r.risk_category} /></td>
                     <td>
-                      {r.cold_start ? (
-                        <span
-                          style={{
-                            color: "var(--risk-medium)",
-                            fontSize: "var(--font-size-xs)",
-                          }}
-                        >
-                          <AlertTriangle
-                            size={12}
-                            style={{ verticalAlign: "middle", marginRight: 4 }}
-                          />
-                          Yes
-                        </span>
-                      ) : (
-                        <span style={{ color: "var(--text-muted)" }}>No</span>
-                      )}
+                      <span style={{
+                        fontWeight: 700,
+                        color: RISK_COLORS[r.risk_category],
+                      }}>
+                        {(r.risk_score * 100).toFixed(1)}%
+                      </span>
                     </td>
                   </tr>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
 
-        {/* Drill-down Panel */}
-        {selectedMerchant && (
-          <div className="glass-card animate-fade-in" style={{ alignSelf: "start" }}>
-            <div
+              {/* Merchants without risk data */}
+              {seedData.merchants
+                .filter((m) => !riskScores.find((r) => r.merchant_id === m))
+                .map((m) => (
+                  <tr key={m}>
+                    <td style={{ color: "var(--text-muted)" }}>
+                      {m.replace("_", " ")}
+                      <span style={{
+                        fontSize: "var(--font-size-xs)",
+                        color: "var(--text-muted)",
+                        marginLeft: 8,
+                        background: "var(--bg-tertiary)",
+                        padding: "2px 8px",
+                        borderRadius: 4,
+                      }}>
+                        NO DATA
+                      </span>
+                    </td>
+                    <td style={{ color: "var(--text-muted)" }}>—</td>
+                    <td style={{ color: "var(--text-muted)" }}>—</td>
+                    <td style={{ color: "var(--text-muted)" }}>—</td>
+                    <td><span style={{ color: "var(--text-muted)", fontSize: "var(--font-size-xs)" }}>—</span></td>
+                    <td><span style={{ color: "var(--text-muted)" }}>—</span></td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Detail Panel */}
+      {selectedMerchant && (
+        <div
+          className="glass-card animate-slide-in"
+          style={{
+            position: "fixed",
+            top: 80,
+            right: 32,
+            width: 380,
+            zIndex: 200,
+            border: "1px solid var(--border-primary)",
+            boxShadow: "var(--shadow-lg), var(--shadow-glow-strong)",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+            <h3 style={{ fontSize: "var(--font-size-md)", fontWeight: 700 }}>
+              {selectedMerchant.merchant_id.replace("_", " ")}
+            </h3>
+            <button
+              onClick={() => setSelectedMerchant(null)}
               style={{
+                background: "var(--bg-tertiary)",
+                border: "1px solid var(--border-secondary)",
+                borderRadius: 8,
+                padding: 6,
+                cursor: "pointer",
                 display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: 18,
+                color: "var(--text-muted)",
               }}
             >
-              <h3 style={{ fontSize: "var(--font-size-md)", fontWeight: 600 }}>
-                <ShieldAlert
-                  size={18}
-                  style={{
-                    verticalAlign: "middle",
-                    marginRight: 8,
-                    color: RISK_COLORS[selectedMerchant.risk_category],
-                  }}
-                />
-                {selectedMerchant.merchant_id.replace("_", " ")}
-              </h3>
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => setSelectedMerchant(null)}
-                style={{ padding: "4px 8px" }}
-              >
-                <X size={14} />
-              </button>
+              <X size={16} />
+            </button>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 18 }}>
+            <div style={{ background: "var(--bg-tertiary)", borderRadius: 10, padding: 14, textAlign: "center" }}>
+              <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", marginBottom: 4 }}>Risk Score</div>
+              <div style={{ fontSize: "var(--font-size-xl)", fontWeight: 800, color: RISK_COLORS[selectedMerchant.risk_category] }}>
+                {(selectedMerchant.risk_score * 100).toFixed(1)}%
+              </div>
             </div>
-
-            <RiskBadge category={selectedMerchant.risk_category} />
-
-            <div style={{ marginTop: 18 }}>
-              {/* Risk Score */}
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  padding: "10px 0",
-                  borderBottom: "1px solid var(--border-secondary)",
-                  fontSize: "var(--font-size-sm)",
-                }}
-              >
-                <span style={{ color: "var(--text-muted)" }}>Risk Score</span>
-                <span
-                  style={{
-                    fontWeight: 700,
-                    color: RISK_COLORS[selectedMerchant.risk_category],
-                  }}
-                >
-                  {(selectedMerchant.risk_score * 100).toFixed(2)}%
-                </span>
-              </div>
-
-              {/* Lambda */}
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  padding: "10px 0",
-                  borderBottom: "1px solid var(--border-secondary)",
-                  fontSize: "var(--font-size-sm)",
-                }}
-              >
-                <span style={{ color: "var(--text-muted)" }}>λ (Lambda Rate)</span>
-                <span style={{ fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
-                  {selectedMerchant.lambda_rate.toFixed(4)}
-                </span>
-              </div>
-
-              {/* Formula */}
-              <div
-                style={{
-                  background: "var(--bg-tertiary)",
-                  border: "1px solid var(--border-secondary)",
-                  borderRadius: "var(--border-radius-sm)",
-                  padding: 12,
-                  marginTop: 14,
-                  fontSize: "var(--font-size-xs)",
-                  color: "var(--text-accent)",
-                  textAlign: "center",
-                  fontFamily: "monospace",
-                }}
-              >
-                P(X ≥ 1) = 1 - e<sup>-{selectedMerchant.lambda_rate.toFixed(4)}</sup> ={" "}
-                <strong>{(selectedMerchant.risk_score * 100).toFixed(2)}%</strong>
-              </div>
-
-              {/* Stats */}
-              <div style={{ marginTop: 14, fontSize: "var(--font-size-sm)" }}>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    padding: "8px 0",
-                    borderBottom: "1px solid var(--border-secondary)",
-                  }}
-                >
-                  <span style={{ color: "var(--text-muted)" }}>Months Observed</span>
-                  <span>{selectedMerchant.months_observed}</span>
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    padding: "8px 0",
-                    borderBottom: "1px solid var(--border-secondary)",
-                  }}
-                >
-                  <span style={{ color: "var(--text-muted)" }}>Late Payments</span>
-                  <span>{selectedMerchant.late_payment_events}</span>
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    padding: "8px 0",
-                    borderBottom: "1px solid var(--border-secondary)",
-                  }}
-                >
-                  <span style={{ color: "var(--text-muted)" }}>Defaults</span>
-                  <span
-                    style={{
-                      color:
-                        selectedMerchant.default_events > 0
-                          ? "var(--risk-critical)"
-                          : undefined,
-                      fontWeight:
-                        selectedMerchant.default_events > 0 ? 600 : undefined,
-                    }}
-                  >
-                    {selectedMerchant.default_events}
-                  </span>
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    padding: "8px 0",
-                    borderBottom: "1px solid var(--border-secondary)",
-                  }}
-                >
-                  <span style={{ color: "var(--text-muted)" }}>Cold Start</span>
-                  <span>{selectedMerchant.cold_start ? "Yes (prior: λ=0.05)" : "No"}</span>
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    padding: "8px 0",
-                  }}
-                >
-                  <span style={{ color: "var(--text-muted)" }}>Model</span>
-                  <span style={{ fontSize: "var(--font-size-xs)" }}>
-                    {selectedMerchant.model}
-                  </span>
-                </div>
-              </div>
+            <div style={{ background: "var(--bg-tertiary)", borderRadius: 10, padding: 14, textAlign: "center" }}>
+              <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", marginBottom: 4 }}>Status</div>
+              <div style={{ marginTop: 4 }}><RiskBadge category={selectedMerchant.risk_category} /></div>
             </div>
           </div>
-        )}
-      </div>
+
+          <div style={{ fontSize: "var(--font-size-sm)", color: "var(--text-secondary)", lineHeight: 1.8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--border-secondary)" }}>
+              <span>Months Tracked</span><span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{selectedMerchant.months_observed}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--border-secondary)" }}>
+              <span>Late Payments</span><span style={{ fontWeight: 600, color: selectedMerchant.late_payment_events > 0 ? "var(--risk-medium)" : "var(--text-primary)" }}>{selectedMerchant.late_payment_events}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--border-secondary)" }}>
+              <span>Defaults</span><span style={{ fontWeight: 600, color: selectedMerchant.default_events > 0 ? "var(--risk-critical)" : "var(--text-primary)" }}>{selectedMerchant.default_events}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0" }}>
+              <span>New Merchant?</span><span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{selectedMerchant.cold_start ? "Yes" : "No"}</span>
+            </div>
+          </div>
+
+          {selectedMerchant.risk_score > 0.3 && (
+            <div style={{
+              marginTop: 16,
+              padding: "12px 14px",
+              background: "var(--risk-critical-bg)",
+              borderRadius: 10,
+              border: "1px solid rgba(248, 113, 113, 0.15)",
+              display: "flex",
+              gap: 10,
+              alignItems: "flex-start",
+            }}>
+              <AlertTriangle size={16} color="var(--risk-critical)" style={{ flexShrink: 0, marginTop: 2 }} />
+              <span style={{ fontSize: "var(--font-size-xs)", color: "var(--risk-critical)", lineHeight: 1.5 }}>
+                This merchant has a high likelihood of missing future payments. Consider reducing exposure.
+              </span>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

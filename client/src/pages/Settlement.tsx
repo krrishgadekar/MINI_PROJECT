@@ -189,8 +189,8 @@ export default function Settlement() {
                       fontSize: 12,
                       color: "#f1f5f9",
                     }}
-                    formatter={(value: number) => [
-                      `\u20B9${value.toLocaleString("en-IN")}`,
+                    formatter={(value: any) => [
+                      `\u20B9${Number(value || 0).toLocaleString("en-IN")}`,
                       "Net Balance",
                     ]}
                   />

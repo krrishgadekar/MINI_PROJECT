@@ -44,7 +44,7 @@ apiClient.interceptors.response.use(
 export default apiClient;
 
 // ---------------------------------------------------------------------------
-// API endpoints (to be used once Chetan's backend is ready)
+// API endpoints (connected to Chetan's Node.js backend on port 4000)
 // ---------------------------------------------------------------------------
 
 export const authAPI = {
@@ -52,23 +52,39 @@ export const authAPI = {
     apiClient.post("/auth/login", { email, password }),
   register: (name: string, email: string, password: string) =>
     apiClient.post("/auth/register", { name, email, password }),
+  getMe: () => apiClient.get("/auth/me"),
+};
+
+export const merchantAPI = {
+  getAll: () => apiClient.get("/merchants"),
+  getById: (id: string) => apiClient.get(`/merchants/${id}`),
 };
 
 export const debtAPI = {
-  getAll: () => apiClient.get("/debts"),
+  getAll: (params?: { debtorId?: string; creditorId?: string; status?: string }) =>
+    apiClient.get("/debts", { params }),
   create: (debtor: string, creditor: string, amount: number) =>
     apiClient.post("/debts", { debtor, creditor, amount }),
+  update: (id: string, amount: number) =>
+    apiClient.patch(`/debts/${id}`, { amount }),
+  settle: (id: string) =>
+    apiClient.delete(`/debts/${id}`),
 };
 
 export const settlementAPI = {
   compute: () => apiClient.post("/settlement"),
-  getCycles: () => apiClient.get("/settlement/cycles"),
+  getCycles: () => apiClient.post("/settlement/cycles"),
   netCycle: (cycle: string[]) =>
     apiClient.post("/settlement/net-cycle", { cycle }),
+  confirm: (batchId: string) =>
+    apiClient.post(`/settlement/confirm/${batchId}`),
 };
 
 export const riskAPI = {
-  getPortfolio: () => apiClient.get("/risk/portfolio"),
+  getPortfolio: () => apiClient.post("/risk/portfolio"),
   getMerchantScore: (merchantId: string) =>
     apiClient.get(`/risk/score/${merchantId}`),
+  scoreMerchant: (merchantId: string, history: Array<{ late: boolean; default: boolean }>) =>
+    apiClient.post(`/risk/score/${merchantId}`, { history }),
 };
+

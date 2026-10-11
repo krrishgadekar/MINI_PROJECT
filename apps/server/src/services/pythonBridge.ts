@@ -52,6 +52,12 @@ export interface PortfolioRiskResult {
   profiles: RiskScoreResult[];
 }
 
+export interface CycleNettingResult {
+  cycle: string[];
+  net_flows: Record<string, number>;
+  amount_netted: number;
+}
+
 // ── Helper: translate 503 when Python engine is down ────────────────────────
 const handleEngineError = (error: unknown): never => {
   if (error instanceof AxiosError) {
@@ -108,6 +114,27 @@ export const callCycleDetection = async (
 };
 
 /**
+ * Calls POST /settlement/net-cycle on the Python engine.
+ * Returns netted cycle summary with updated flows.
+ */
+export const callNetCycle = async (
+  merchants: string[],
+  debts: DebtEdge[],
+  cycle: string[],
+): Promise<CycleNettingResult> => {
+  try {
+    const { data } = await axios.post<CycleNettingResult>(`${ENGINE_URL}/settlement/net-cycle`, {
+      merchants,
+      debts,
+      cycle,
+    });
+    return data;
+  } catch (error) {
+    return handleEngineError(error);
+  }
+};
+
+/**
  * Calls POST /risk/score on the Python engine.
  * Returns Poisson-based default probability for one merchant.
  */
@@ -142,3 +169,4 @@ export const callPortfolioRisk = async (
     return handleEngineError(error);
   }
 };
+

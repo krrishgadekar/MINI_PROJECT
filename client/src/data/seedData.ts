@@ -6,7 +6,7 @@
  * backend is ready.
  */
 
-import type { SeedData, DebtEdge, MerchantHistory } from "../types";
+import type { SeedData } from "../types";
 
 export const seedData: SeedData = {
   scenario_name: "Crawford Market Vendors",

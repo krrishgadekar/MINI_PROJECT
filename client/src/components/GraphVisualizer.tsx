@@ -1,8 +1,9 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import ForceGraph2D from "react-force-graph-2d";
-import { bfs, buildAdjacencyList, getPathEdges } from "../graph/traversal";
+import { bfs, buildAdjacencyList } from "../graph/traversal";
 import type { DebtEdge, RiskScoreResponse, GraphNode, GraphLink } from "../types";
 import { MousePointer2, RotateCcw } from "lucide-react";
+
 
 interface GraphVisualizerProps {
   merchants: string[];

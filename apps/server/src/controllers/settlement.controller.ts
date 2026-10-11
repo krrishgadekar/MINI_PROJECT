@@ -4,7 +4,7 @@ import { AuthRequest } from '../middleware/auth.middleware';
 import { Debt } from '../models/Debt';
 import { Merchant } from '../models/Merchant';
 import { Settlement } from '../models/Settlement';
-import { callSettlement, callCycleDetection, DebtEdge } from '../services/pythonBridge';
+import { callSettlement, callCycleDetection, callNetCycle, DebtEdge } from '../services/pythonBridge';
 import { getIO } from '../realtime/socket';
 
 /**
@@ -98,6 +98,74 @@ export const detectCycles = async (
 };
 
 /**
+ * POST /api/settlement/net-cycle
+ * Nets a circular debt cycle and updates affected debt balances in MongoDB
+ */
+export const netCycleController = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const { cycle } = req.body;
+    if (!Array.isArray(cycle) || cycle.length < 2) {
+      res.status(400).json({ message: 'A valid cycle array of at least 2 merchants is required.' });
+      return;
+    }
+
+    const { merchants, debts } = await buildGraphPayload();
+    const result = await callNetCycle(merchants, debts, cycle);
+
+    // Apply netting reductions to MongoDB active debts
+    const amountNetted = result.amount_netted;
+    if (amountNetted > 0) {
+      for (let i = 0; i < cycle.length; i++) {
+        const debtorName = cycle[i];
+        const creditorName = cycle[(i + 1) % cycle.length];
+
+        const [debtor, creditor] = await Promise.all([
+          Merchant.findOne({ name: debtorName }),
+          Merchant.findOne({ name: creditorName }),
+        ]);
+
+        if (debtor && creditor) {
+          const debt = await Debt.findOne({
+            debtorId: debtor._id,
+            creditorId: creditor._id,
+            status: 'active',
+          });
+
+          if (debt) {
+            const newAmount = Math.max(0, debt.amount - amountNetted);
+            debt.amount = newAmount;
+            if (newAmount === 0) {
+              debt.status = 'netted';
+            }
+            await debt.save();
+
+            const populated = await debt.populate([
+              { path: 'debtorId', select: 'name email' },
+              { path: 'creditorId', select: 'name email' },
+            ]);
+            getIO().emit('debt:updated', { debt: populated });
+          }
+        }
+      }
+    }
+
+    getIO().emit('cycle:netted', {
+      cycle: result.cycle,
+      amountNetted: result.amount_netted,
+      netFlows: result.net_flows,
+    });
+
+    res.json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * POST /api/settlement/confirm/:batchId
  * Confirms a settlement batch and marks all active debts as settled
  */
@@ -132,3 +200,4 @@ export const confirmSettlement = async (
     next(error);
   }
 };
+

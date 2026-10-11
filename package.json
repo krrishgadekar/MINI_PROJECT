@@ -1,0 +1,17 @@
+{
+  "name": "creditflow-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CreditFlow — Graph-Theoretic Debt Settlement & Credit-Risk Analysis",
+  "scripts": {
+    "dev": "npm --prefix apps/server run dev",
+    "dev:server": "npm --prefix apps/server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "build": "npm --prefix apps/server run build",
+    "build:server": "npm --prefix apps/server run build",
+    "build:client": "npm --prefix client run build",
+    "seed": "npm --prefix apps/server run seed",
+    "test": "npm --prefix apps/server run test",
+    "test:server": "npm --prefix apps/server run test"
+  }
+}

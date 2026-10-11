@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Bell, Monitor, Moon, Shield } from "lucide-react";
+import { Bell, Moon, Shield } from "lucide-react";
 
 export default function Settings() {
   const [notifications, setNotifications] = useState(true);

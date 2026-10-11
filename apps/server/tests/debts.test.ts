@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { createApp } from '../src/app';
 import { Merchant } from '../src/models/Merchant';
+import { createMemoryServer } from './setup';
 
 jest.mock('../src/realtime/socket', () => ({
   getIO: () => ({
@@ -18,8 +19,10 @@ let debtorId: string;
 let creditorId: string;
 let debtId: string;
 
+jest.setTimeout(60000);
+
 beforeAll(async () => {
-  mongoServer = await MongoMemoryServer.create();
+  mongoServer = await createMemoryServer();
   await mongoose.connect(mongoServer.getUri());
 
   // Create two merchants to use in tests
@@ -52,6 +55,8 @@ afterAll(async () => {
     await mongoServer.stop();
   }
 });
+
+
 
 describe('Debts API', () => {
   it('creates a new debt', async () => {

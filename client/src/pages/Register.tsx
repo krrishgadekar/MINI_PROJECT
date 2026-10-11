@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { ArrowRight, Sparkles } from "lucide-react";
+import { authAPI } from "../api/client";
 
 /**
  * Register — Account creation page.
@@ -32,12 +33,23 @@ export default function Register() {
     }
 
     setLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    const fakeToken = btoa(JSON.stringify({ email, name, iat: Date.now() }));
-    localStorage.setItem("creditflow_token", fakeToken);
-    setLoading(false);
-    navigate("/");
+    try {
+      const res = await authAPI.register(name, email, password);
+      if (res.data?.accessToken) {
+        localStorage.setItem("creditflow_token", res.data.accessToken);
+        if (res.data.merchant) {
+          localStorage.setItem("creditflow_user", JSON.stringify(res.data.merchant));
+        }
+        navigate("/");
+      }
+    } catch (err: unknown) {
+      const errorObj = err as { response?: { data?: { message?: string } } };
+      setError(errorObj.response?.data?.message || "Failed to create account.");
+    } finally {
+      setLoading(false);
+    }
   };
+
 
   return (
     <div className="auth-page">

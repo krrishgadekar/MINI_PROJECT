@@ -1,5 +1,7 @@
 import express, { Application } from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import { authRouter } from './routes/auth.routes';
 import { merchantsRouter } from './routes/merchants.routes';
 import { debtsRouter } from './routes/debts.routes';
@@ -11,6 +13,16 @@ export const createApp = (): Application => {
   const app = express();
 
   // ── Middleware ──────────────────────────────────────────────────────────────
+  app.use(helmet());
+  
+  // Rate limiting for auth routes to prevent brute force
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // limit each IP to 100 requests per windowMs
+    message: 'Too many requests from this IP, please try again after 15 minutes',
+  });
+  app.use('/api/auth', authLimiter);
+
   app.use(cors({
     origin: ['http://localhost:3000', 'http://localhost:4000'],
     credentials: true,

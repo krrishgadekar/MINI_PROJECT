@@ -3,14 +3,16 @@ import request from 'supertest';
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { createApp } from '../src/app';
+import { createMemoryServer } from './setup';
 
 const app = createApp();
 let mongoServer: MongoMemoryServer;
 
+jest.setTimeout(60000);
+
 beforeAll(async () => {
-  mongoServer = await MongoMemoryServer.create();
-  const mongoUri = mongoServer.getUri();
-  await mongoose.connect(mongoUri);
+  mongoServer = await createMemoryServer();
+  await mongoose.connect(mongoServer.getUri());
 });
 
 afterAll(async () => {
@@ -19,6 +21,8 @@ afterAll(async () => {
     await mongoServer.stop();
   }
 });
+
+
 
 describe('Auth — POST /api/auth/register', () => {
   it('registers a new merchant and returns tokens', async () => {

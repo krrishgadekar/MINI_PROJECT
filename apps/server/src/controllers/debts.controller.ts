@@ -5,11 +5,20 @@ import { Debt } from '../models/Debt';
 import { Merchant } from '../models/Merchant';
 import { getIO } from '../realtime/socket';
 
-const CreateDebtSchema = z.object({
-  debtorId: z.string().min(1),
-  creditorId: z.string().min(1),
-  amount: z.number().positive(),
-});
+import mongoose from 'mongoose';
+
+const CreateDebtSchema = z
+  .object({
+    debtorId: z.string().optional(),
+    creditorId: z.string().optional(),
+    debtor: z.string().optional(),
+    creditor: z.string().optional(),
+    amount: z.number().positive(),
+  })
+  .refine(
+    (data) => (data.debtorId || data.debtor) && (data.creditorId || data.creditor),
+    { message: 'Debtor and Creditor identifiers are required.' },
+  );
 
 const UpdateDebtSchema = z.object({
   amount: z.number().positive(),
@@ -43,7 +52,7 @@ export const getAllDebts = async (
 
 /**
  * POST /api/debts
- * Body: { debtorId, creditorId, amount }
+ * Body: { debtorId, creditorId, amount } OR { debtor, creditor, amount }
  */
 export const createDebt = async (
   req: AuthRequest,
@@ -57,17 +66,32 @@ export const createDebt = async (
       return;
     }
 
-    const { debtorId, creditorId, amount } = parsed.data;
+    const debtorKey = (parsed.data.debtorId || parsed.data.debtor)!;
+    const creditorKey = (parsed.data.creditorId || parsed.data.creditor)!;
+    const { amount } = parsed.data;
+
+    const findMerchant = async (key: string) => {
+      if (mongoose.isValidObjectId(key)) {
+        const byId = await Merchant.findById(key);
+        if (byId) return byId;
+      }
+      return Merchant.findOne({ name: key });
+    };
 
     // Validate that both merchants exist
     const [debtor, creditor] = await Promise.all([
-      Merchant.findById(debtorId),
-      Merchant.findById(creditorId),
+      findMerchant(debtorKey),
+      findMerchant(creditorKey),
     ]);
     if (!debtor) { res.status(404).json({ message: 'Debtor merchant not found.' }); return; }
     if (!creditor) { res.status(404).json({ message: 'Creditor merchant not found.' }); return; }
 
-    const debt = await Debt.create({ debtorId, creditorId, amount, originalAmount: amount });
+    const debt = await Debt.create({
+      debtorId: debtor._id,
+      creditorId: creditor._id,
+      amount,
+      originalAmount: amount,
+    });
     const populated = await debt.populate([
       { path: 'debtorId', select: 'name email' },
       { path: 'creditorId', select: 'name email' },
@@ -81,6 +105,7 @@ export const createDebt = async (
     next(error);
   }
 };
+
 
 /**
  * PATCH /api/debts/:id

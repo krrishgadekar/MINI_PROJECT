@@ -173,9 +173,8 @@ export default function Dashboard() {
                     borderRadius: 10,
                     fontSize: 12,
                     color: "#f1f5f9",
-                    backdropFilter: 'blur(10px)',
                   }}
-                  formatter={(value: number) => [`${value}%`, "Risk Level"]}
+                  formatter={(value: any) => [`${value}%`, "Risk Level"]}
                 />
                 <Bar dataKey="risk" radius={[0, 6, 6, 0]} barSize={14}>
                   {riskChartData.map((entry, index) => (

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { computeMockRiskScores, seedData } from "../data/seedData";
 import RiskBadge from "../components/RiskBadge";
 import type { RiskScoreResponse } from "../types";
-import { ShieldAlert, X, TrendingUp, AlertTriangle } from "lucide-react";
+import { X, TrendingUp, AlertTriangle } from "lucide-react";
 import {
   PieChart,
   Pie,
@@ -138,10 +138,11 @@ export default function Risk() {
                   fontSize: 12,
                   color: "#f1f5f9",
                 }}
-                formatter={(value: number, name: string) => [`${value} merchants`, name]}
+                formatter={(value: any, name: any) => [`${value} merchants`, String(name)]}
               />
             </PieChart>
           </ResponsiveContainer>
+
           <div style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: 12, marginTop: 4 }}>
             {categoryDist.map((cat) => (
               <div key={cat.name} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "var(--font-size-xs)" }}>

@@ -8,6 +8,7 @@ import { debtsRouter } from './routes/debts.routes';
 import { settlementRouter } from './routes/settlement.routes';
 import { riskRouter } from './routes/risk.routes';
 import { errorHandler } from './middleware/errorHandler';
+import { getClientOrigins } from './config/cors';
 
 export const createApp = (): Application => {
   const app = express();
@@ -24,7 +25,7 @@ export const createApp = (): Application => {
   app.use('/api/auth', authLimiter);
 
   app.use(cors({
-    origin: ['http://localhost:3000', 'http://localhost:4000'],
+    origin: getClientOrigins(),
     credentials: true,
   }));
   app.use(express.json());

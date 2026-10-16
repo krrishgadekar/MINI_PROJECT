@@ -1,11 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
+import { AppError } from '../utils/errors';
 
-export interface AppError extends Error {
-  statusCode?: number;
-}
+export { AppError };
 
 export const errorHandler = (
-  err: AppError,
+  err: any,
   _req: Request,
   res: Response,
   _next: NextFunction,
@@ -18,6 +17,18 @@ export const errorHandler = (
     if (statusCode === 500) console.error(err.stack);
   }
 
+  // Typed AppError or error containing a specific code
+  if (err.code) {
+    res.status(statusCode).json({
+      success: false,
+      code: err.code,
+      message,
+      ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
+    });
+    return;
+  }
+
+  // Keep current behaviour for untyped errors
   res.status(statusCode).json({
     success: false,
     message,

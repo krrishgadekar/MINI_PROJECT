@@ -104,3 +104,404 @@ Connect the client via Socket.IO to `http://localhost:4000`.
 - **`debt:settled`**: `{ debtId: "..." }` — emitted globally when a specific debt is marked settled.
 - **`settlement:ready`**: `{ batchId, transactions, transactionCount }` — emitted globally when Python engine finishes minimization.
 - **`settlement:confirmed`**: `{ batchId }` — emitted globally when all debts are wiped/settled.
+
+---
+
+## 7. Groups / Debts / Payments / Audit (v2 contract)
+
+### 7.1 Multi-Tenant Headers & Scoping
+All group-scoped endpoints require:
+1. `Authorization: Bearer <jwt_token>`
+2. `X-Group-Id: <group_mongo_id>` (tenant boundary identifier)
+
+### 7.2 Role Rules & Permissions
+| Role | Visibility | Allowed Actions |
+|---|---|---|
+| `owner` / `admin` | Full group graph and all debts (`scope=all` or default) | Add/remove members, assign roles, rotate invite codes, compute/confirm settlements, view all audit logs. |
+| `member` | Ego-network only (`scope=mine`): debts where member is debtor or creditor | Create debt requests (start in `pending`), confirm/reject/dispute debts where they are counterparty, record payments on own debts, view own audit logs. |
+
+### 7.3 Standard Error Shape
+```json
+{
+  "success": false,
+  "code": "ERROR_CODE",
+  "message": "Human readable explanation"
+}
+```
+
+#### Slice A Error Codes
+- **`FORBIDDEN_GROUP`** (403): User is not a member of the group specified in `X-Group-Id` or lacks permission for the requested action.
+- **`CONCURRENT_MODIFICATION`** (409): Optimistic locking / CAS version mismatch (`expectedVersion` ≠ current `version`).
+- **`STALE_SETTLEMENT`** (409): Debt versions changed since settlement batch snapshot was computed.
+- **`VALIDATION`** (400): Invalid request payload (missing fields, negative amount, invalid role, etc.).
+- **`NOT_FOUND`** (404): Group, Debt, Member, or Payment resource not found within the tenant.
+- **`IDEMPOTENT_REPLAY`** (409 / 200): Request was already executed under this idempotency key.
+
+---
+
+### 7.4 Groups Endpoints (`/api/groups`)
+
+#### `POST /groups`
+Creates a new group. The authenticated caller automatically becomes the `owner`.
+- **Headers**: `Authorization: Bearer <token>`
+- **Request Body**:
+```json
+{
+  "name": "Crawford Market Circle",
+  "type": "market"
+}
+```
+- **Returns (201)**:
+```json
+{
+  "success": true,
+  "group": {
+    "_id": "66123abc456def7890123456",
+    "name": "Crawford Market Circle",
+    "type": "market",
+    "ownerId": "66123abc456def7890123000",
+    "inviteCode": "CRAWF882",
+    "createdAt": "2026-10-16T12:00:00.000Z"
+  }
+}
+```
+
+#### `GET /groups`
+Returns all groups where the authenticated user is a member.
+- **Headers**: `Authorization: Bearer <token>`
+- **Returns (200)**:
+```json
+{
+  "success": true,
+  "groups": [
+    {
+      "_id": "66123abc456def7890123456",
+      "name": "Crawford Market Circle",
+      "type": "market",
+      "ownerId": "66123abc456def7890123000",
+      "role": "owner"
+    }
+  ]
+}
+```
+
+#### `POST /groups/join`
+Join a group using an invite code. Role is set to `member`.
+- **Headers**: `Authorization: Bearer <token>`
+- **Request Body**:
+```json
+{
+  "inviteCode": "CRAWF882"
+}
+```
+- **Returns (200)**:
+```json
+{
+  "success": true,
+  "membership": {
+    "_id": "66123abc456def7890123777",
+    "groupId": "66123abc456def7890123456",
+    "merchantId": "66123abc456def7890123001",
+    "role": "member",
+    "joinedAt": "2026-10-16T12:05:00.000Z"
+  }
+}
+```
+
+#### `GET /groups/:id/members`
+List all members in the group with their roles.
+- **Headers**: `Authorization: Bearer <token>`, `X-Group-Id: <id>`
+- **Returns (200)**:
+```json
+{
+  "success": true,
+  "members": [
+    {
+      "merchantId": "66123abc456def7890123000",
+      "name": "Wholesale A",
+      "email": "wholesale.a@demo.com",
+      "role": "owner",
+      "joinedAt": "2026-10-16T12:00:00.000Z"
+    },
+    {
+      "merchantId": "66123abc456def7890123001",
+      "name": "Vendor B",
+      "email": "vendor.b@demo.com",
+      "role": "member",
+      "joinedAt": "2026-10-16T12:05:00.000Z"
+    }
+  ]
+}
+```
+
+#### `PATCH /groups/:id/members/:mid`
+Update member's role (admin/owner only).
+- **Headers**: `Authorization: Bearer <token>`, `X-Group-Id: <id>`
+- **Request Body**:
+```json
+{
+  "role": "admin"
+}
+```
+- **Returns (200)**:
+```json
+{
+  "success": true,
+  "membership": {
+    "merchantId": "66123abc456def7890123001",
+    "role": "admin"
+  }
+}
+```
+
+#### `DELETE /groups/:id/members/:mid`
+Remove member from group (admin/owner) or leave group (self).
+- **Headers**: `Authorization: Bearer <token>`, `X-Group-Id: <id>`
+- **Returns (200)**:
+```json
+{
+  "success": true,
+  "message": "Member removed from group"
+}
+```
+
+#### `POST /groups/:id/invite-code/rotate`
+Rotate group invite code to prevent unauthorized joins.
+- **Headers**: `Authorization: Bearer <token>`, `X-Group-Id: <id>`
+- **Returns (200)**:
+```json
+{
+  "success": true,
+  "inviteCode": "NEW8CODE"
+}
+```
+
+---
+
+### 7.5 Debts v2 Endpoints (`/api/debts`)
+
+#### `GET /debts?scope=mine|all&status=&page=&limit=`
+Fetch debts in the current tenant group.
+- **Headers**: `Authorization: Bearer <token>`, `X-Group-Id: <id>`
+- **Role Rules**: `all` is admin-only; `member` can only query `scope=mine`.
+- **Returns (200)**:
+```json
+{
+  "success": true,
+  "count": 1,
+  "debts": [
+    {
+      "_id": "66123abc456def7890123888",
+      "groupId": "66123abc456def7890123456",
+      "debtorId": "66123abc456def7890123001",
+      "creditorId": "66123abc456def7890123000",
+      "amount": 7500,
+      "originalAmount": 10000,
+      "status": "active",
+      "dueDate": "2026-11-01T00:00:00.000Z",
+      "note": "Produce delivery invoice #402",
+      "version": 1,
+      "createdAt": "2026-10-16T12:10:00.000Z",
+      "updatedAt": "2026-10-16T12:20:00.000Z"
+    }
+  ]
+}
+```
+
+#### `GET /debts/:id`
+Click-through single transaction detail returning debt, payment timeline, and audit log.
+- **Headers**: `Authorization: Bearer <token>`, `X-Group-Id: <id>`
+- **Role Rules**: Caller must be a party to the debt (debtor or creditor) or a group admin/owner.
+- **Returns (200) `DebtDetailResponse`**:
+```json
+{
+  "success": true,
+  "debt": {
+    "_id": "66123abc456def7890123888",
+    "groupId": "66123abc456def7890123456",
+    "debtorId": "66123abc456def7890123001",
+    "creditorId": "66123abc456def7890123000",
+    "amount": 7500,
+    "originalAmount": 10000,
+    "status": "active",
+    "dueDate": "2026-11-01T00:00:00.000Z",
+    "note": "Produce delivery invoice #402",
+    "version": 1
+  },
+  "payments": [
+    {
+      "_id": "66123abc456def7890123999",
+      "groupId": "66123abc456def7890123456",
+      "debtId": "66123abc456def7890123888",
+      "amount": 2500,
+      "kind": "partial",
+      "recordedBy": "66123abc456def7890123001",
+      "note": "UPI transfer ref #239482",
+      "createdAt": "2026-10-16T12:20:00.000Z"
+    }
+  ],
+  "audit": [
+    {
+      "_id": "66123abc456def7890123444",
+      "groupId": "66123abc456def7890123456",
+      "actorId": "66123abc456def7890123001",
+      "action": "PAYMENT_RECORDED",
+      "entityType": "Debt",
+      "entityId": "66123abc456def7890123888",
+      "meta": { "amount": 2500, "remaining": 7500 },
+      "createdAt": "2026-10-16T12:20:00.000Z"
+    }
+  ]
+}
+```
+
+#### `POST /debts`
+Creates a new debt in `pending` status awaiting counterparty confirmation.
+- **Headers**: `Authorization: Bearer <token>`, `X-Group-Id: <id>`
+- **Request Body**:
+```json
+{
+  "debtorId": "66123abc456def7890123001",
+  "creditorId": "66123abc456def7890123000",
+  "amount": 10000,
+  "dueDate": "2026-11-01T00:00:00.000Z",
+  "note": "Produce delivery invoice #402"
+}
+```
+- **Returns (201)**:
+```json
+{
+  "success": true,
+  "debt": {
+    "_id": "66123abc456def7890123888",
+    "groupId": "66123abc456def7890123456",
+    "debtorId": "66123abc456def7890123001",
+    "creditorId": "66123abc456def7890123000",
+    "amount": 10000,
+    "originalAmount": 10000,
+    "status": "pending",
+    "version": 0
+  }
+}
+```
+
+#### `POST /debts/:id/confirm`
+Counterparty confirms pending debt, transitioning it to `active`.
+- **Headers**: `Authorization: Bearer <token>`, `X-Group-Id: <id>`
+- **Returns (200)**:
+```json
+{
+  "success": true,
+  "debt": {
+    "_id": "66123abc456def7890123888",
+    "status": "active",
+    "confirmedBy": "66123abc456def7890123001",
+    "version": 1
+  }
+}
+```
+
+#### `POST /debts/:id/reject`
+Counterparty rejects pending debt request.
+- **Headers**: `Authorization: Bearer <token>`, `X-Group-Id: <id>`
+- **Returns (200)**:
+```json
+{
+  "success": true,
+  "message": "Debt request rejected"
+}
+```
+
+#### `POST /debts/:id/dispute`
+Flags an active debt as `disputed`.
+- **Headers**: `Authorization: Bearer <token>`, `X-Group-Id: <id>`
+- **Request Body**:
+```json
+{
+  "reason": "Damaged goods in delivery"
+}
+```
+- **Returns (200)**:
+```json
+{
+  "success": true,
+  "debt": {
+    "_id": "66123abc456def7890123888",
+    "status": "disputed",
+    "version": 2
+  }
+}
+```
+
+---
+
+### 7.6 Payment Ledger Endpoints (`/api/debts/:id/payments`)
+
+#### `POST /debts/:id/payments`
+Records a partial or settlement payment against an active debt using CAS optimistic locking.
+- **Headers**: `Authorization: Bearer <token>`, `X-Group-Id: <id>`
+- **Request Body**:
+```json
+{
+  "amount": 2500,
+  "expectedVersion": 1,
+  "kind": "partial",
+  "note": "UPI payment #992812"
+}
+```
+- **Returns (201)**:
+```json
+{
+  "success": true,
+  "payment": {
+    "_id": "66123abc456def7890123999",
+    "groupId": "66123abc456def7890123456",
+    "debtId": "66123abc456def7890123888",
+    "amount": 2500,
+    "kind": "partial",
+    "recordedBy": "66123abc456def7890123001",
+    "note": "UPI payment #992812",
+    "createdAt": "2026-10-16T12:20:00.000Z"
+  },
+  "debt": {
+    "_id": "66123abc456def7890123888",
+    "amount": 7500,
+    "status": "active",
+    "version": 2
+  }
+}
+```
+- **Errors**:
+  - `409 Conflict`: `CONCURRENT_MODIFICATION` if `expectedVersion` does not match the stored version.
+
+---
+
+### 7.7 Audit Log Endpoints (`/api/audit`)
+
+#### `GET /audit?entityId=&page=&limit=`
+Retrieves tenant-isolated audit log entries.
+- **Headers**: `Authorization: Bearer <token>`, `X-Group-Id: <id>`
+- **Role Rules**: `admin` / `owner` sees all group audit logs; `member` sees logs where they are the actor or entity party.
+- **Returns (200)**:
+```json
+{
+  "success": true,
+  "count": 1,
+  "audit": [
+    {
+      "_id": "66123abc456def7890123444",
+      "groupId": "66123abc456def7890123456",
+      "actorId": "66123abc456def7890123001",
+      "action": "PAYMENT_RECORDED",
+      "entityType": "Debt",
+      "entityId": "66123abc456def7890123888",
+      "meta": {
+        "amount": 2500,
+        "remaining": 7500
+      },
+      "createdAt": "2026-10-16T12:20:00.000Z"
+    }
+  ]
+}
+```
+

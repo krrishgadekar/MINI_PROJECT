@@ -45,3 +45,7 @@ benchmarks/results/*.csv
 
 # Uvicorn / FastAPI
 *.log
+
+# Local Mongo data
+.mongo-data/
+

@@ -1,12 +1,13 @@
 import { Server as HttpServer } from 'http';
 import { Server as SocketIOServer, Socket } from 'socket.io';
+import { getClientOrigins } from '../config/cors';
 
 let io: SocketIOServer;
 
 export const initSocket = (httpServer: HttpServer): SocketIOServer => {
   io = new SocketIOServer(httpServer, {
     cors: {
-      origin: ['http://localhost:3000', 'http://localhost:4000'],
+      origin: getClientOrigins(),
       methods: ['GET', 'POST'],
       credentials: true,
     },

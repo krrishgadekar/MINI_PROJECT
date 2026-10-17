@@ -39,6 +39,12 @@ from creditflow.algorithms.risk_engine import (
     MerchantRiskProfile,
     RiskEngine,
 )
+from creditflow.algorithms.stats_engine import (
+    one_proportion_ztest,
+    pearson,
+    composite_risk,
+    risk_label,
+)
 
 __all__ = [
     "compute_net_balances",
@@ -62,4 +68,9 @@ __all__ = [
     "compute_composite_risk",
     "MerchantRiskProfile",
     "RiskEngine",
+    "one_proportion_ztest",
+    "pearson",
+    "composite_risk",
+    "risk_label",
 ]
+

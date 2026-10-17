@@ -93,3 +93,101 @@ export const callNetCycle = async (
     return handleEngineError(error);
   }
 };
+
+export interface ExactSettlementResult {
+  net_balances: Record<string, number>;
+  transactions: TransactionItem[];
+  transaction_count: number;
+  total_amount_settled: number;
+  greedy_transaction_count: number;
+  optimality_gap: number;
+  algorithm: string;
+  capped: boolean;
+  message?: string;
+}
+
+export interface CycleNettingItem {
+  cycle: string[];
+  amount_netted: number;
+}
+
+export interface NetAllCyclesResult {
+  cycles_netted: CycleNettingItem[];
+  total_amount_netted: number;
+  remaining_debts: DebtEdge[];
+  initial_edge_count: number;
+  remaining_edge_count: number;
+  eliminated_edge_count: number;
+}
+
+export interface SettlementOptimizeResult {
+  before_edges: DebtEdge[];
+  after_netting_edges: DebtEdge[];
+  cycles_netted: CycleNettingItem[];
+  total_netted_amount: number;
+  transactions: TransactionItem[];
+  transaction_count: number;
+  total_amount_settled: number;
+  savings: number;
+  before_total_debt: number;
+  after_total_debt: number;
+  exact_transaction_count?: number;
+  optimality_gap?: number;
+}
+
+/**
+ * Calls POST /settlement/exact on the Python engine.
+ * Computes optimal settlement via bitmask DP / backtracking (≤12 balances).
+ */
+export const callExactSettlement = async (
+  merchants: string[],
+  debts: DebtEdge[],
+): Promise<ExactSettlementResult> => {
+  try {
+    const { data } = await http.post<ExactSettlementResult>(`${ENGINE_URL}/settlement/exact`, {
+      merchants,
+      debts,
+    });
+    return data;
+  } catch (error) {
+    return handleEngineError(error);
+  }
+};
+
+/**
+ * Calls POST /settlement/net-all on the Python engine.
+ * Repeatedly nets circular debt loops until graph is acyclic.
+ */
+export const callNetAllCycles = async (
+  merchants: string[],
+  debts: DebtEdge[],
+): Promise<NetAllCyclesResult> => {
+  try {
+    const { data } = await http.post<NetAllCyclesResult>(`${ENGINE_URL}/settlement/net-all`, {
+      merchants,
+      debts,
+    });
+    return data;
+  } catch (error) {
+    return handleEngineError(error);
+  }
+};
+
+/**
+ * Calls POST /settlement/optimize on the Python engine.
+ * Runs pre-netting pipeline followed by greedy & exact settlement.
+ */
+export const callOptimizeSettlement = async (
+  merchants: string[],
+  debts: DebtEdge[],
+): Promise<SettlementOptimizeResult> => {
+  try {
+    const { data } = await http.post<SettlementOptimizeResult>(`${ENGINE_URL}/settlement/optimize`, {
+      merchants,
+      debts,
+    });
+    return data;
+  } catch (error) {
+    return handleEngineError(error);
+  }
+};

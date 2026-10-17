@@ -165,3 +165,70 @@ def net_cycle(graph: MerchantGraph, cycle: List[str]) -> Dict[str, float]:
             net_flows[f"{debtor}:{creditor}"] = round(remaining, 2)
 
     return net_flows
+
+
+def net_all_cycles(
+    graph: MerchantGraph,
+    max_iterations: int = 200,
+) -> Tuple[MerchantGraph, List[Dict], float]:
+    """
+    Repeatedly identify and net directed cycles until the graph becomes acyclic (DAG).
+
+    At each iteration:
+      1. Detect cycles using find_all_cycles.
+      2. If no cycles exist, terminate.
+      3. For the first detected cycle, determine minimum flow min_flow.
+      4. Subtract min_flow from each edge in the cycle (cancelling the bottleneck edge to 0).
+      5. Record the netted cycle and accumulated savings.
+      6. Repeat until no cycles remain or max_iterations is reached.
+
+    Returns:
+    --------
+    (netted_graph, cycles_netted, total_amount_netted)
+      - netted_graph: MerchantGraph with cycles netted out
+      - cycles_netted: list of {"cycle": List[str], "amount_netted": float}
+      - total_amount_netted: total debt volume eliminated without moving money
+    """
+    netted_graph = MerchantGraph.from_dict(graph.to_dict())
+    cycles_netted: List[Dict] = []
+    total_netted = 0.0
+    iteration = 0
+
+    while iteration < max_iterations:
+        iteration += 1
+        cycles = find_all_cycles(netted_graph)
+        if not cycles:
+            break
+
+        # Process the first cycle
+        cycle = cycles[0]
+        if len(cycle) < 2:
+            break
+
+        # Find min flow in this cycle
+        edges_flow = [
+            netted_graph.get_debt(cycle[i], cycle[(i + 1) % len(cycle)])
+            for i in range(len(cycle))
+        ]
+        min_flow = min(edges_flow)
+        if min_flow <= 1e-9:
+            # Degenerate zero edge; clean up and continue
+            for i in range(len(cycle)):
+                u, v = cycle[i], cycle[(i + 1) % len(cycle)]
+                if netted_graph.get_debt(u, v) <= 1e-9:
+                    netted_graph.remove_debt(u, v)
+            continue
+
+        for i in range(len(cycle)):
+            u = cycle[i]
+            v = cycle[(i + 1) % len(cycle)]
+            rem = round(netted_graph.get_debt(u, v) - min_flow, 2)
+            netted_graph.set_debt(u, v, rem)
+
+        cycles_netted.append({
+            "cycle": list(cycle),
+            "amount_netted": round(min_flow, 2),
+        })
+        total_netted += min_flow
+
+    return netted_graph, cycles_netted, round(total_netted, 2)

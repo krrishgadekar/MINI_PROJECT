@@ -102,6 +102,28 @@ class MerchantGraph:
         val = self._adj_matrix.get(debtor, {}).get(creditor, self.INF)
         return 0.0 if val == self.INF else val
 
+    def remove_debt(self, debtor: str, creditor: str) -> None:
+        """Remove a debt edge between debtor and creditor if it exists."""
+        if not self.has_merchant(debtor) or not self.has_merchant(creditor):
+            return
+        self._adj_list[debtor] = [
+            entry for entry in self._adj_list[debtor] if entry[0] != creditor
+        ]
+        self._adj_matrix[debtor][creditor] = self.INF
+
+    def set_debt(self, debtor: str, creditor: str, amount: float) -> None:
+        """Set direct debt from debtor to creditor. If amount <= 1e-9, removes edge."""
+        if amount <= 1e-9:
+            self.remove_debt(debtor, creditor)
+            return
+        if not self.has_merchant(debtor):
+            self.add_merchant(debtor)
+        if not self.has_merchant(creditor):
+            self.add_merchant(creditor)
+        self.remove_debt(debtor, creditor)
+        self._adj_list[debtor].append((creditor, amount))
+        self._adj_matrix[debtor][creditor] = amount
+
     def get_all_edges(self) -> List[Tuple[str, str, float]]:
         """Return list of (debtor, creditor, amount) for every edge."""
         edges = []

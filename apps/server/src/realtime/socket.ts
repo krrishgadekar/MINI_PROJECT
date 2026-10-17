@@ -11,7 +11,7 @@ export const initSocket = (httpServer: HttpServer): SocketIOServer => {
       methods: ['GET', 'POST'],
       credentials: true,
     },
-  });
+  } as any);
 
   io.on('connection', (socket: Socket) => {
     console.log(`🔌 Socket connected: ${socket.id}`);

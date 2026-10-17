@@ -192,3 +192,7 @@ export const callZTest = async (
     return handleEngineError(error);
   }
 };
+
+/** Alias for callPearson matching spec */
+export const callCorrelation = callPearson;
+

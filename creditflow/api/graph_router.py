@@ -14,6 +14,7 @@ from creditflow.api.schemas import (
     GraphResponse,
     TransitiveClosureResponse,
     ReachableResponse,
+    SccResponse,
 )
 from creditflow.graph import MerchantGraph
 from creditflow.algorithms.warshall import (
@@ -22,6 +23,7 @@ from creditflow.algorithms.warshall import (
     get_cyclic_risk_pairs,
     closure_to_dict,
 )
+from creditflow.algorithms.scc import scc_summary
 
 router = APIRouter(prefix="/graph", tags=["Graph"])
 
@@ -103,3 +105,20 @@ def reachable_from(merchant_id: str) -> ReachableResponse:
         )
     reachable = get_reachable_merchants(_graph_store, merchant_id)
     return ReachableResponse(source=merchant_id, reachable=reachable)
+
+
+@router.post(
+    "/scc",
+    response_model=SccResponse,
+    summary="Compute strongly connected components (Tarjan's O(V+E))",
+)
+def get_scc(req: GraphBuildRequest) -> SccResponse:
+    """
+    Compute Strongly Connected Components (SCCs) of the merchant debt graph
+    using Tarjan's algorithm.
+
+    Identifies groups of mutually-indebted merchants for graph clustering and netting.
+    """
+    g = _build_graph(req)
+    res = scc_summary(g)
+    return SccResponse(**res)

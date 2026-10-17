@@ -15,10 +15,21 @@ from creditflow.api.schemas import (
     CycleCheckResponse,
     CycleNettingRequest,
     CycleNettingResponse,
+    ExactSettlementResponse,
+    NetAllCyclesResponse,
+    SettlementOptimizeResponse,
+    CycleNettingItem,
+    DebtEdge,
 )
 from creditflow.graph import MerchantGraph
 from creditflow.algorithms.settlement import settlement_summary
-from creditflow.algorithms.cycle_detection import find_all_cycles, has_cycle, net_cycle
+from creditflow.algorithms.cycle_detection import (
+    find_all_cycles,
+    has_cycle,
+    net_cycle,
+    net_all_cycles,
+)
+from creditflow.algorithms.exact_settlement import exact_minimum_settlement
 
 router = APIRouter(prefix="/settlement", tags=["Settlement"])
 
@@ -103,4 +114,112 @@ def net_cycle_endpoint(req: CycleNettingRequest) -> CycleNettingResponse:
         cycle=req.cycle,
         net_flows=net_flows,
         amount_netted=round(min_flow, 2),
+    )
+
+
+@router.post(
+    "/exact",
+    response_model=ExactSettlementResponse,
+    summary="Compute exact minimum settlement (backtracking, ≤12 balances)",
+)
+def compute_exact_settlement(req: SettlementRequest) -> ExactSettlementResponse:
+    """
+    Compute optimal debt settlement via dynamic programming over zero-sum subsets.
+    Guarantees the global minimum transaction count for up to 12 non-zero balances.
+    Falls back to greedy heuristic if N > 12.
+    """
+    g = _build_graph_from_request(req)
+    res = exact_minimum_settlement(g)
+    return ExactSettlementResponse(
+        net_balances=res["net_balances"],
+        transactions=[TransactionItem(**t) for t in res["transactions"]],
+        transaction_count=res["transaction_count"],
+        total_amount_settled=res["total_amount_settled"],
+        greedy_transaction_count=res["greedy_transaction_count"],
+        optimality_gap=res["optimality_gap"],
+        algorithm=res["algorithm"],
+        capped=res["capped"],
+        message=res.get("message"),
+    )
+
+
+@router.post(
+    "/net-all",
+    response_model=NetAllCyclesResponse,
+    summary="Repeatedly net all circular debt cycles until acyclic",
+)
+def net_all_endpoint(req: SettlementRequest) -> NetAllCyclesResponse:
+    """
+    Continuously detect and net circular debt chains until no cycles remain (DAG).
+    Reduces total outstanding debt volume without any cash settlement required.
+    """
+    g = _build_graph_from_request(req)
+    initial_edge_count = len(g.get_all_edges())
+
+    netted_graph, cycles_netted, total_netted = net_all_cycles(g)
+    remaining_edges = [
+        DebtEdge(debtor=d, creditor=c, amount=a)
+        for d, c, a in netted_graph.get_all_edges()
+    ]
+
+    return NetAllCyclesResponse(
+        cycles_netted=[CycleNettingItem(**c) for c in cycles_netted],
+        total_amount_netted=total_netted,
+        remaining_debts=remaining_edges,
+        initial_edge_count=initial_edge_count,
+        remaining_edge_count=len(remaining_edges),
+        eliminated_edge_count=initial_edge_count - len(remaining_edges),
+    )
+
+
+@router.post(
+    "/optimize",
+    response_model=SettlementOptimizeResponse,
+    summary="Settlement with cycle pre-netting pipeline",
+)
+def optimize_settlement(req: SettlementRequest) -> SettlementOptimizeResponse:
+    """
+    Multi-stage settlement optimization pipeline:
+    1. Detect circular debt loops and net all of them out.
+    2. Settle remaining acyclic debts via greedy heap settlement.
+    3. If non-zero balances <= 12, also calculate exact optimal transaction count.
+    4. Return full before/after audit report with savings.
+    """
+    g = _build_graph_from_request(req)
+    before_edges = [
+        DebtEdge(debtor=d, creditor=c, amount=a)
+        for d, c, a in g.get_all_edges()
+    ]
+    before_total = sum(e.amount for e in before_edges)
+
+    # 1. Pre-netting
+    netted_graph, cycles_netted, total_netted = net_all_cycles(g)
+    after_edges = [
+        DebtEdge(debtor=d, creditor=c, amount=a)
+        for d, c, a in netted_graph.get_all_edges()
+    ]
+    after_total = sum(e.amount for e in after_edges)
+
+    # 2. Greedy settlement on netted graph
+    summary = settlement_summary(netted_graph)
+    greedy_txns = [TransactionItem(**t) for t in summary["transactions"]]
+
+    # 3. Exact evaluation
+    exact_res = exact_minimum_settlement(netted_graph)
+    exact_count = exact_res["transaction_count"]
+    opt_gap = exact_res["optimality_gap"]
+
+    return SettlementOptimizeResponse(
+        before_edges=before_edges,
+        after_netting_edges=after_edges,
+        cycles_netted=[CycleNettingItem(**c) for c in cycles_netted],
+        total_netted_amount=total_netted,
+        transactions=greedy_txns,
+        transaction_count=len(greedy_txns),
+        total_amount_settled=summary["total_amount_settled"],
+        savings=total_netted,
+        before_total_debt=round(before_total, 2),
+        after_total_debt=round(after_total, 2),
+        exact_transaction_count=exact_count,
+        optimality_gap=opt_gap,
     )

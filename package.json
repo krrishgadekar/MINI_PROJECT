@@ -13,5 +13,9 @@
     "seed": "npm --prefix apps/server run seed",
     "test": "npm --prefix apps/server run test",
     "test:server": "npm --prefix apps/server run test"
+  },
+  "devDependencies": {
+    "jest": "^30.5.2",
+    "jest-cli": "^30.5.2"
   }
 }

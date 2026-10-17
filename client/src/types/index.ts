@@ -100,6 +100,10 @@ export interface RiskScoreResponse {
   risk_category: RiskCategory;
   model: string;
   cold_start: boolean;
+  z_score?: number | null;
+  p_value?: number | null;
+  risk_label?: string | null;
+  composite_score?: number | null;
 }
 
 export interface PortfolioRiskResponse {
@@ -247,3 +251,147 @@ export interface NotificationItem {
   readAt?: string | null;
   createdAt?: string;
 }
+
+// ---------------------------------------------------------------------------
+// Slice C Risk v2, Contagion, Notifications & Real-Time Socket Map
+// ---------------------------------------------------------------------------
+
+export type RiskLabel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' | 'UNKNOWN';
+
+export interface RiskAssessmentV2 {
+  merchantId: string;
+  lambda: number;
+  zScore?: number | null;
+  pValue?: number | null;
+  correlation?: number | null;
+  riskScore: number;
+  riskLabel: RiskLabel;
+  computedAt: string;
+}
+
+export interface ContagionResult {
+  source: string;
+  totalLoss: number;
+  perMerchantLoss: Record<string, number>;
+  levels: string[][];
+  directLosses?: Record<string, number>;
+  secondOrderLosses?: Record<string, number>;
+  affectedMerchants?: string[];
+  networkVulnerabilityScore?: number;
+}
+
+export interface Notification {
+  id: string;
+  type: string;
+  message: string;
+  refType?: string;
+  refId?: string;
+  readAt?: string | null;
+  createdAt: string;
+  groupId?: string;
+  merchantId?: string;
+}
+
+// Socket Event Payload Types
+export interface DebtCreatedPayload {
+  debt: Debt;
+}
+
+export interface DebtUpdatedPayload {
+  debt: Debt;
+}
+
+export interface DebtSettledPayload {
+  debtId: string;
+}
+
+export interface DebtDisputedPayload {
+  debtId: string;
+  reason?: string;
+}
+
+export interface DebtConfirmedPayload {
+  debt: Debt;
+}
+
+export interface DebtRejectedPayload {
+  debtId: string;
+}
+
+export interface DebtPaymentPayload {
+  debt: Debt;
+  payment: Payment;
+}
+
+export interface SettlementBatchCreatedPayload {
+  batchId: string;
+  settlement: SettlementResponse;
+}
+
+export interface SettlementBatchConfirmedPayload {
+  batchId: string;
+}
+
+export interface SettlementCycleNettedPayload {
+  cycle: string[];
+  amountNetted: number;
+}
+
+export interface RiskFlaggedPayload {
+  merchantId: string;
+  riskScore: number;
+  riskLabel: RiskLabel;
+  reason?: string;
+  timestamp?: string;
+}
+
+export interface CycleNettedPayload {
+  cycle: string[];
+  amountNetted: number;
+  remainingDebts?: DebtEdge[];
+}
+
+export interface BatchUpdateItem {
+  type: string;
+  payload: any;
+  timestamp: number;
+}
+
+export interface BatchUpdatePayload {
+  events: BatchUpdateItem[];
+  batchSeq?: number;
+}
+
+export interface PresencePingPayload {
+  timestamp: number;
+  serverTime?: string;
+}
+
+export interface PresenceAckPayload {
+  timestamp: number;
+  clientTime?: string;
+}
+
+export interface NotificationNewPayload {
+  notification: Notification;
+}
+
+export interface SocketEventMap {
+  'debt:created': DebtCreatedPayload;
+  'debt:updated': DebtUpdatedPayload;
+  'debt:settled': DebtSettledPayload;
+  'debt:disputed': DebtDisputedPayload;
+  'debt:confirmed': DebtConfirmedPayload;
+  'debt:rejected': DebtRejectedPayload;
+  'debt:payment': DebtPaymentPayload;
+  'settlement:batch_created': SettlementBatchCreatedPayload;
+  'settlement:batch_confirmed': SettlementBatchConfirmedPayload;
+  'settlement:cycle_netted': SettlementCycleNettedPayload;
+  'risk:flagged': RiskFlaggedPayload;
+  'cycle:netted': CycleNettedPayload;
+  'batch:update': BatchUpdatePayload;
+  'presence:ping': PresencePingPayload;
+  'presence:ack': PresenceAckPayload;
+  'notification:new': NotificationNewPayload;
+}
+

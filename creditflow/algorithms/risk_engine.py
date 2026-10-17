@@ -150,6 +150,7 @@ class MerchantRiskProfile:
             "lambda_rate": round(self.lambda_rate, 4),
             "risk_score": self.risk_score,
             "risk_category": self.risk_category,
+            "risk_label": self.risk_category,
             "model": "Poisson(λ), P(X≥1) = 1 - e^(-λ)",
             "cold_start": self._months_observed < self.MIN_MONTHS,
         }

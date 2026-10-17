@@ -505,3 +505,232 @@ Retrieves tenant-isolated audit log entries.
 }
 ```
 
+---
+
+## 8. Risk, Notifications & Realtime (v2 contract)
+
+### 8.1 Risk Endpoints (`/api/risk`)
+
+#### `GET /risk/group`
+Fetches group-wide aggregate risk analytics, average portfolio default rate, and all merchant risk assessments within the tenant group.
+- **Headers**: `Authorization: Bearer <token>`, `X-Group-Id: <id>`
+- **Returns (200)**:
+```json
+{
+  "success": true,
+  "groupRisk": {
+    "averageRiskScore": 0.185,
+    "totalMerchants": 4,
+    "highRiskCount": 1,
+    "assessments": [
+      {
+        "merchantId": "66123abc456def7890123001",
+        "lambda": 0.25,
+        "zScore": 2.15,
+        "pValue": 0.0157,
+        "correlation": 0.62,
+        "riskScore": 0.221,
+        "riskLabel": "MEDIUM",
+        "computedAt": "2026-10-17T12:00:00.000Z"
+      },
+      {
+        "merchantId": "66123abc456def7890123002",
+        "lambda": 0.75,
+        "zScore": 3.84,
+        "pValue": 0.0001,
+        "correlation": 0.81,
+        "riskScore": 0.527,
+        "riskLabel": "HIGH",
+        "computedAt": "2026-10-17T12:00:00.000Z"
+      }
+    ]
+  }
+}
+```
+
+#### `GET /risk/merchant/:id`
+Fetches the detailed risk profile for a specific merchant in the group, including Poisson $\lambda$, hypothesis test $z$-score, $p$-value, and delay-amount correlation.
+- **Headers**: `Authorization: Bearer <token>`, `X-Group-Id: <id>`
+- **Returns (200)**:
+```json
+{
+  "success": true,
+  "assessment": {
+    "merchantId": "66123abc456def7890123001",
+    "lambda": 0.25,
+    "zScore": 2.15,
+    "pValue": 0.0157,
+    "correlation": 0.62,
+    "riskScore": 0.221,
+    "riskLabel": "MEDIUM",
+    "computedAt": "2026-10-17T12:00:00.000Z"
+  }
+}
+```
+
+#### `POST /risk/recompute`
+Triggers full group-wide recomputation of risk scores across all merchants using historical ledger events.
+- **Headers**: `Authorization: Bearer <token>`, `X-Group-Id: <id>`
+- **Returns (200)**:
+```json
+{
+  "success": true,
+  "recomputedCount": 4,
+  "groupRisk": {
+    "averageRiskScore": 0.185,
+    "totalMerchants": 4,
+    "highRiskCount": 1,
+    "assessments": []
+  }
+}
+```
+
+#### `POST /risk/contagion`
+Simulates systemic network default shock if a target merchant defaults, returning cascade levels and per-merchant financial loss.
+- **Headers**: `Authorization: Bearer <token>`, `X-Group-Id: <id>`
+- **Request Body**:
+```json
+{
+  "merchantId": "66123abc456def7890123001",
+  "lossGivenDefault": 1.0,
+  "maxRounds": 5
+}
+```
+- **Returns (200)**:
+```json
+{
+  "success": true,
+  "contagion": {
+    "source": "66123abc456def7890123001",
+    "totalLoss": 15000,
+    "perMerchantLoss": {
+      "66123abc456def7890123002": 10000,
+      "66123abc456def7890123003": 5000
+    },
+    "levels": [
+      ["66123abc456def7890123001"],
+      ["66123abc456def7890123002"],
+      ["66123abc456def7890123003"]
+    ]
+  }
+}
+```
+
+---
+
+### 8.2 Notification Endpoints (`/api/notifications`)
+
+#### `GET /notifications`
+Retrieves tenant-isolated notifications for the authenticated merchant.
+- **Headers**: `Authorization: Bearer <token>`, `X-Group-Id: <id>`
+- **Query Params (Optional)**: `?unreadOnly=true&page=1&limit=20`
+- **Returns (200)**:
+```json
+{
+  "success": true,
+  "count": 2,
+  "unreadCount": 1,
+  "notifications": [
+    {
+      "id": "66123abc456def7890123555",
+      "type": "risk:flagged",
+      "message": "Merchant Apex Supplies marked HIGH risk (score: 0.527)",
+      "refType": "RiskAssessment",
+      "refId": "66123abc456def7890123002",
+      "readAt": null,
+      "createdAt": "2026-10-17T12:05:00.000Z"
+    },
+    {
+      "id": "66123abc456def7890123556",
+      "type": "debt:confirmed",
+      "message": "Debt #888 confirmed by counterparty",
+      "refType": "Debt",
+      "refId": "66123abc456def7890123888",
+      "readAt": "2026-10-17T12:10:00.000Z",
+      "createdAt": "2026-10-17T12:02:00.000Z"
+    }
+  ]
+}
+```
+
+#### `PATCH /notifications/:id/read`
+Marks a specific notification as read.
+- **Headers**: `Authorization: Bearer <token>`, `X-Group-Id: <id>`
+- **Returns (200)**:
+```json
+{
+  "success": true,
+  "notification": {
+    "id": "66123abc456def7890123555",
+    "type": "risk:flagged",
+    "message": "Merchant Apex Supplies marked HIGH risk (score: 0.527)",
+    "refType": "RiskAssessment",
+    "refId": "66123abc456def7890123002",
+    "readAt": "2026-10-17T12:15:00.000Z",
+    "createdAt": "2026-10-17T12:05:00.000Z"
+  }
+}
+```
+
+#### `POST /notifications/read-all`
+Marks all notifications in the tenant group for the authenticated merchant as read.
+- **Headers**: `Authorization: Bearer <token>`, `X-Group-Id: <id>`
+- **Returns (200)**:
+```json
+{
+  "success": true,
+  "markedCount": 3
+}
+```
+
+---
+
+### 8.3 Realtime Socket Architecture & AIMD Throttling
+
+#### Socket Handshake & Room Subscriptions
+Client connects to Socket.IO with credentials in the handshake authentication block:
+```typescript
+const socket = io("http://localhost:4000", {
+  auth: {
+    token: "<JWT_BEARER_TOKEN>"
+  }
+});
+```
+- **Authentication**: Verified on server via `socket.handshake.auth.token`. Invalid or expired tokens are rejected immediately.
+- **Auto-joined Rooms**:
+  - `group:<id>` — Automatically joined for each group the authenticated merchant belongs to. All group broadcasts (`debt:*`, `settlement:*`, `risk:flagged`, `cycle:netted`, `batch:update`) are scoped to this room.
+  - `merchant:<id>` — Private room joined for the merchant's own identity. Receives private messages (`notification:new`, direct mentions, and individual debt updates).
+
+#### AIMD (Additive Increase / Multiplicative Decrease) Flow Control
+To protect browser performance against event cascades and network bursts:
+- **Window Initialization**: Connection starts with `windowSize = 10` messages.
+- **Additive Increase**: On client acknowledgment (`ack`), increment window size by 1 (`+1`), up to a maximum cap of `50`.
+- **Multiplicative Decrease**: On acknowledgment timeout or backpressure, halve the window size (`windowSize = max(1, Math.floor(windowSize / 2))`).
+- **Floor**: Window size never drops below `1`.
+- **Cap**: Window size is bounded at `50`.
+- **Flush Interval**: Pending event queue flushes every `200ms` as a bundled `batch:update` payload.
+- **Ack Timeout**: Client has `500ms` to acknowledge receipt of batches before timeout occurs and triggers multiplicative decrease.
+- **Heartbeat & Liveness**: Server periodically issues `presence:ping` `{ timestamp }`, client immediately answers with `presence:ack` `{ timestamp, clientTime }`.
+
+#### Socket Event Map & Payloads
+
+| Event Name | Scope / Room | Direction | Payload Shape | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `debt:created` | `group:<id>` | Server -> Client | `{ debt: Debt }` | New debt added to ledger |
+| `debt:updated` | `group:<id>` | Server -> Client | `{ debt: Debt }` | Debt amount or status changed |
+| `debt:settled` | `group:<id>` | Server -> Client | `{ debtId: string }` | Specific debt settled |
+| `debt:disputed` | `group:<id>` | Server -> Client | `{ debtId: string, reason?: string }` | Debt disputed by debtor |
+| `debt:confirmed` | `group:<id>` | Server -> Client | `{ debt: Debt }` | Debt confirmed by counterparty |
+| `debt:rejected` | `group:<id>` | Server -> Client | `{ debtId: string }` | Debt rejected by counterparty |
+| `debt:payment` | `group:<id>` | Server -> Client | `{ debt: Debt, payment: Payment }` | Payment recorded against debt |
+| `settlement:batch_created` | `group:<id>` | Server -> Client | `{ batchId: string, settlement: SettlementResponse }` | Settlement proposal generated |
+| `settlement:batch_confirmed` | `group:<id>` | Server -> Client | `{ batchId: string }` | Settlement batch finalized |
+| `settlement:cycle_netted` | `group:<id>` | Server -> Client | `{ cycle: string[], amountNetted: number }` | Individual cycle netted |
+| `risk:flagged` | `group:<id>` | Server -> Client | `{ merchantId: string, riskScore: number, riskLabel: string, reason?: string, timestamp?: string }` | Merchant transitioned to high/critical risk |
+| `cycle:netted` | `group:<id>` | Server -> Client | `{ cycle: string[], amountNetted: number, remainingDebts?: DebtEdge[] }` | Pre-netting cycle cleared from network |
+| `batch:update` | `group:<id>` | Server -> Client | `{ events: Array<{ type: string, payload: any, timestamp: number }>, batchSeq?: number }` | AIMD-throttled batch coalescing events |
+| `presence:ping` | Direct | Server -> Client | `{ timestamp: number, serverTime?: string }` | Liveness check |
+| `presence:ack` | Direct | Client -> Server | `{ timestamp: number, clientTime?: string }` | Liveness ack |
+| `notification:new` | `merchant:<id>` | Server -> Client | `{ notification: Notification }` | Realtime notification delivered to recipient |
+
+

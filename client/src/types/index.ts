@@ -100,6 +100,10 @@ export interface RiskScoreResponse {
   risk_category: RiskCategory;
   model: string;
   cold_start: boolean;
+  z_score?: number | null;
+  p_value?: number | null;
+  risk_label?: string | null;
+  composite_score?: number | null;
 }
 
 export interface PortfolioRiskResponse {

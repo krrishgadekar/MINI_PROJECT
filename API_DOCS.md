@@ -733,4 +733,130 @@ To protect browser performance against event cascades and network bursts:
 | `presence:ack` | Direct | Client -> Server | `{ timestamp: number, clientTime?: string }` | Liveness ack |
 | `notification:new` | `merchant:<id>` | Server -> Client | `{ notification: Notification }` | Realtime notification delivered to recipient |
 
+---
+
+## 8. Phase 1: Risk Data Foundation & Statistical Engine (Slice C)
+
+### 8.1 Statistical Endpoints (Python Service / Risk Router)
+
+#### `POST /risk/ztest`
+Performs a one-proportion hypothesis test evaluating whether a merchant's rate of adverse payment events is statistically significantly elevated relative to the baseline network delinquency rate.
+- **Request Body**:
+  ```json
+  {
+    "merchant_id": "merchant_123",
+    "successes": 15,
+    "trials": 40,
+    "baseline_p": 0.05,
+    "alpha": 0.05,
+    "avg_delay_days": 14.5
+  }
+  ```
+- **Response Shape**:
+  ```json
+  {
+    "merchant_id": "merchant_123",
+    "observed_p": 0.375,
+    "baseline_p": 0.05,
+    "z_score": 9.428,
+    "p_value": 0.00001,
+    "p_value_two_tailed": 0.00002,
+    "is_significant": true,
+    "sample_size": 40,
+    "interpretation": "Observed proportion (0.3750) is significantly greater than baseline (0.0500) at alpha=0.05 (z=9.43, p=0.00001).",
+    "composite_risk_score": 0.7412
+  }
+  ```
+
+#### `POST /risk/correlation`
+Calculates the Pearson correlation coefficient ($r$) and 2-tailed significance ($p$-value) with guards against short sample sizes ($n < 3$) and zero-variance series.
+- **Request Body (records or series pair)**:
+  ```json
+  {
+    "records": [
+      {
+        "merchant_id": "m1",
+        "avg_delay": 5.2,
+        "avg_amount": 12000,
+        "frequency": 8,
+        "late_rate": 0.12
+      }
+    ]
+  }
+  ```
+  *or:*
+  ```json
+  {
+    "series_a": [1.0, 2.0, 3.0, 4.0, 5.0],
+    "series_b": [2.0, 4.0, 6.0, 8.0, 10.0]
+  }
+  ```
+- **Response Shape**:
+  ```json
+  {
+    "delay_vs_amount": {
+      "r": 0.852,
+      "p_value": 0.0012,
+      "significant": true,
+      "sample_size": 15,
+      "interpretation": "Strong positive correlation"
+    },
+    "frequency_vs_late_rate": {
+      "r": -0.421,
+      "p_value": 0.104,
+      "significant": false,
+      "sample_size": 15,
+      "interpretation": "Moderate negative correlation"
+    },
+    "custom_pair": null,
+    "sample_size": 15
+  }
+  ```
+
+#### Extended `POST /risk/score` (Backwards Compatible)
+Existing Poisson calculation responses are enhanced with additive stats fields:
+- `z_score?: float` — Standardized deviation relative to network prior rate.
+- `p_value?: float` — One-tailed statistical significance.
+- `risk_label?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' | 'UNKNOWN'` — Composite severity classification:
+  - `LOW`: score < 0.33
+  - `MEDIUM`: 0.33 ≤ score < 0.66
+  - `HIGH`: 0.66 ≤ score ≤ 0.85
+  - `CRITICAL`: score > 0.85
+  - `UNKNOWN`: insufficient or uninitialized data
+- `composite_score?: float` — Blended score: $0.4 \times \text{norm}(\lambda) + 0.4 \times (1 - p) + 0.2 \times \text{norm}(\text{delay})$.
+
+### 8.2 Backend Persistence Models (MongoDB / Mongoose)
+
+#### `PaymentEvent`
+Tracks historical transaction timeliness for default probability and empirical hypothesis testing:
+- **Schema**:
+  - `groupId: string` (required)
+  - `merchantId: string` (required)
+  - `debtId: string` (required)
+  - `dueDate: Date` (required)
+  - `paidDate?: Date` (optional)
+  - `wasLate: boolean` (default: false)
+  - `delayDays: number` (default: 0)
+- **Index**: `{ merchantId: 1, dueDate: -1 }`
+
+#### `Notification`
+In-app merchant notification queue:
+- **Schema**:
+  - `groupId: string` (required)
+  - `merchantId: string` (required)
+  - `type: 'SETTLEMENT_PROPOSED' | 'CYCLE_DETECTED' | 'RISK_ALERT' | 'DEBT_DISPUTED' | 'PAYMENT_RECEIVED' | 'SYSTEM'`
+  - `message: string` (required)
+  - `refType?: 'DEBT' | 'SETTLEMENT' | 'MERCHANT' | 'GROUP'`
+  - `refId?: string`
+  - `readAt?: Date` (default: null)
+  - `createdAt: Date` (default: Date.now)
+- **Index**: `{ merchantId: 1, readAt: 1, createdAt: -1 }`
+
+### 8.3 Mock Adapter Domain Delegation
+Frontend runtime toggling via `VITE_MOCK_DOMAINS` env var:
+- `all` (default) — routes all domains to in-memory seed stores (`client/src/api/mock/`).
+- `none` — delegates all domains to real backend endpoints (`client/src/api/real.ts`).
+- Comma-separated list (e.g. `risk,notifications`) — mocks only specified domains while routing remainder to real axios client.
+
+
 

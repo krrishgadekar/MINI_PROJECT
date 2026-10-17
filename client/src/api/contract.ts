@@ -38,9 +38,38 @@ import type {
   MonthRecord,
 } from '../types';
 
+export type {
+  Debt,
+  DebtEdge,
+  DebtStatus,
+  Group,
+  GroupType,
+  Membership,
+  Role,
+  Payment,
+  PaymentKind,
+  AuditEntry,
+  DebtDetailResponse,
+  GraphResponse,
+  TransitiveClosureResponse,
+  ReachableResponse,
+  SettlementResponse,
+  TransactionItem,
+  CycleCheckResponse,
+  CycleNettingResponse,
+  RiskScoreResponse,
+  PortfolioRiskResponse,
+  RiskAssessmentV2,
+  ContagionResult,
+  Notification,
+  MonthRecord,
+};
+
+
 // ============================================================================
 // Request & Response Shapes
 // ============================================================================
+
 
 // ── Generic / Auth ──────────────────────────────────────────────────────────
 
@@ -537,7 +566,7 @@ export interface Api {
   risk: {
     score(merchantId: string, data?: ScoreMerchantRiskRequest): Promise<MerchantRiskResponse>;
     getScore(merchantId: string): Promise<MerchantRiskResponse>;
-    portfolio(data?: PortfolioRiskRequest): Promise<PortfolioRiskResponse>;
+    portfolio(data?: PortfolioRiskRequest): Promise<{ success: boolean; portfolio: PortfolioRiskResponse }>;
     group(): Promise<GroupRiskResponse>;
     merchant(id: string): Promise<MerchantRiskV2Response>;
     recompute(): Promise<RecomputeRiskResponse>;

@@ -50,7 +50,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from creditflow.graph import MerchantGraph
 from creditflow.algorithms.warshall import warshall_transitive_closure
 from creditflow.algorithms.settlement import greedy_minimum_settlement
+from creditflow.algorithms.exact_settlement import exact_minimum_settlement
 from creditflow.algorithms.cycle_detection import find_all_cycles
+from creditflow.algorithms.scc import tarjan_scc
 from creditflow.algorithms.risk_engine import MerchantRiskProfile, RiskEngine
 
 # ---------------------------------------------------------------------------
@@ -211,6 +213,80 @@ def benchmark_risk_engine(sizes: List[int], months: int = 24) -> Dict[str, list]
         measured.append(t)
         print(f"      N={n:4d}  ->  {t*1000:.3f} ms")
     return {"sizes": sizes, "measured": measured}
+
+
+# ---------------------------------------------------------------------------
+# Benchmark 5 — Exact Solver vs. Greedy Settlement (Optimality & Runtime)
+# ---------------------------------------------------------------------------
+
+def benchmark_exact_vs_greedy(sizes: List[int]) -> Dict[str, list]:
+    print("\n[5/6] Benchmarking Exact vs. Greedy Settlement (DAA trade-off) ...")
+    exact_times = []
+    greedy_times = []
+    exact_counts = []
+    greedy_counts = []
+    optimality_gaps = []
+
+    for n in sizes:
+        random.seed(n * 13)
+        g = make_random_graph(n, edge_density=0.4)
+
+        t_greedy = measure_time(greedy_minimum_settlement, g)
+        greedy_res = greedy_minimum_settlement(g)
+
+        t_exact = measure_time(exact_minimum_settlement, g)
+        exact_res = exact_minimum_settlement(g)
+
+        exact_times.append(t_exact)
+        greedy_times.append(t_greedy)
+        exact_counts.append(exact_res["transaction_count"])
+        greedy_counts.append(len(greedy_res))
+        gap = max(0, len(greedy_res) - exact_res["transaction_count"])
+        optimality_gaps.append(gap)
+
+        print(f"      N={n:2d} | Exact: {t_exact*1000:7.3f} ms ({exact_res['transaction_count']} txns) | Greedy: {t_greedy*1000:6.3f} ms ({len(greedy_res)} txns) | Gap: {gap}")
+
+    return {
+        "sizes": sizes,
+        "exact_times": exact_times,
+        "greedy_times": greedy_times,
+        "exact_counts": exact_counts,
+        "greedy_counts": greedy_counts,
+        "optimality_gaps": optimality_gaps,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Benchmark 6 — Tarjan's SCC O(V+E) vs. Warshall's O(V³)
+# ---------------------------------------------------------------------------
+
+def benchmark_scc_vs_warshall(sizes: List[int]) -> Dict[str, list]:
+    print("\n[6/6] Benchmarking Tarjan's SCC O(V+E) vs. Warshall's O(V³) ...")
+    scc_times = []
+    warshall_times = []
+    edge_counts = []
+
+    for v in sizes:
+        random.seed(v * 17)
+        g = make_random_graph(v, edge_density=0.3)
+        e = len(g.get_all_edges())
+        edge_counts.append(e)
+
+        t_scc = measure_time(tarjan_scc, g)
+        t_warshall = measure_time(warshall_transitive_closure, g)
+
+        scc_times.append(t_scc)
+        warshall_times.append(t_warshall)
+
+        speedup = t_warshall / max(t_scc, 1e-9)
+        print(f"      V={v:3d} E={e:4d} | Tarjan: {t_scc*1000:6.3f} ms | Warshall: {t_warshall*1000:7.2f} ms | Speedup: {speedup:5.1f}x")
+
+    return {
+        "sizes": sizes,
+        "scc_times": scc_times,
+        "warshall_times": warshall_times,
+        "edge_counts": edge_counts,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -448,22 +524,84 @@ def save_combined_plot(warshall_data, settlement_data, cycle_data, risk_data, mo
     return path
 
 
+def save_exact_vs_greedy_plot(data: dict):
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5.2))
+    sizes = np.array(data["sizes"])
+    exact_ms = np.array(data["exact_times"]) * 1000
+    greedy_ms = np.array(data["greedy_times"]) * 1000
+
+    # Subplot 1: Runtime (Log scale)
+    ax1.plot(sizes, exact_ms, "o-", color="#FF6B6B", linewidth=2.5, markersize=6, label="Exact Solver (O(2^N) DP)")
+    ax1.plot(sizes, greedy_ms, "s-", color="#4F86F7", linewidth=2.5, markersize=6, label="Greedy Heuristic (O(N log N))")
+    ax1.set_title("Runtime Comparison (Wall-Clock)\nDesign & Analysis of Algorithms", fontsize=11, fontweight="bold", color=STYLE["accent_color"], pad=12)
+    ax1.set_xlabel("Merchants with Non-Zero Balances (N)", fontsize=9)
+    ax1.set_ylabel("Time (ms) — Log Scale", fontsize=9)
+    ax1.set_yscale("log")
+    ax1.legend(fontsize=8, facecolor=STYLE["axes_facecolor"], edgecolor=STYLE["grid_color"], labelcolor=STYLE["text_color"])
+    ax1.grid(True, alpha=0.4)
+
+    # Subplot 2: Solution Quality / Optimality Gap
+    ax2.plot(sizes, data["greedy_counts"], "s--", color="#4F86F7", linewidth=2, label="Greedy Txn Count")
+    ax2.plot(sizes, data["exact_counts"], "o-", color="#00E676", linewidth=2.5, label="Exact Optimal Txn Count")
+    ax2.fill_between(sizes, data["exact_counts"], data["greedy_counts"], color="#FFD700", alpha=0.25, label="Optimality Gap")
+    ax2.set_title("Solution Quality (Transaction Count)\nOptimality Gap Demonstration", fontsize=11, fontweight="bold", color=STYLE["accent_color"], pad=12)
+    ax2.set_xlabel("Merchants with Non-Zero Balances (N)", fontsize=9)
+    ax2.set_ylabel("Transactions Required", fontsize=9)
+    ax2.legend(fontsize=8, facecolor=STYLE["axes_facecolor"], edgecolor=STYLE["grid_color"], labelcolor=STYLE["text_color"])
+    ax2.grid(True, alpha=0.4)
+
+    fig.tight_layout()
+    path = os.path.join(RESULTS_DIR, "exact_vs_greedy_complexity.png")
+    fig.savefig(path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  Saved: {path}")
+    return path
+
+
+def save_scc_vs_warshall_plot(data: dict):
+    fig, ax = plt.subplots(figsize=(9, 5.5))
+    sizes = np.array(data["sizes"])
+    scc_ms = np.array(data["scc_times"]) * 1000
+    warshall_ms = np.array(data["warshall_times"]) * 1000
+
+    ax.plot(sizes, warshall_ms, "o-", color="#FF6B6B", linewidth=2.5, markersize=6, label="Warshall Transitive Closure (O(V^3))", zorder=5)
+    ax.plot(sizes, scc_ms, "s-", color="#00E676", linewidth=2.5, markersize=6, label="Tarjan's SCC Algorithm (O(V+E))", zorder=6)
+
+    ax.set_title("Tarjan's SCC O(V+E) vs. Warshall's Closure O(V^3)\nAsymptotic Scaling Comparison", fontsize=11, fontweight="bold", color=STYLE["accent_color"], pad=12)
+    ax.set_xlabel("Number of Merchants (V)", fontsize=9)
+    ax.set_ylabel("Time (ms)", fontsize=9)
+    ax.legend(fontsize=9, facecolor=STYLE["axes_facecolor"], edgecolor=STYLE["grid_color"], labelcolor=STYLE["text_color"])
+    ax.grid(True, alpha=0.4)
+
+    max_speedup = warshall_ms[-1] / max(scc_ms[-1], 1e-9)
+    ax.annotate(f"{max_speedup:.0f}x Speedup at V={sizes[-1]}",
+                xy=(sizes[-1], warshall_ms[-1]),
+                xytext=(-120, -30), textcoords="offset points",
+                fontsize=9, color=STYLE["accent_color"],
+                arrowprops=dict(arrowstyle="->", color=STYLE["accent_color"], lw=1.2))
+
+    fig.tight_layout()
+    path = os.path.join(RESULTS_DIR, "scc_vs_warshall_complexity.png")
+    fig.savefig(path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  Saved: {path}")
+    return path
+
+
 # ---------------------------------------------------------------------------
 # Summary table
 # ---------------------------------------------------------------------------
 
-def print_summary_table(warshall_data, settlement_data, cycle_data, risk_data):
+def print_summary_table(warshall_data, settlement_data, cycle_data, risk_data, exact_data=None, scc_data=None):
     print("\n" + "="*70)
     print("  COMPLEXITY BENCHMARK SUMMARY")
     print("="*70)
-    print(f"  {'Algorithm':<35} {'Claimed':<12} Verdict")
+    print(f"  {'Algorithm':<35} {'Claimed':<14} Verdict")
     print("-"*70)
 
     def verdict(sizes, measured, theory_fn):
-        """Check if measured times roughly grow with the claimed complexity."""
         x = np.array(sizes, dtype=float)
         y = np.array(measured)
-        # Pearson correlation between measured and theory
         theory = np.array([theory_fn(xi) for xi in x])
         corr = float(np.corrcoef(y, theory)[0, 1])
         if corr > 0.90:
@@ -486,9 +624,23 @@ def print_summary_table(warshall_data, settlement_data, cycle_data, risk_data):
          risk_data["sizes"], risk_data["measured"], lambda n: n * 24),
     ]
 
+    if scc_data:
+        rows.append((
+            "Tarjan's SCC Algorithm", "O(V+E)",
+            scc_data["sizes"], scc_data["scc_times"],
+            lambda v: v + 0.3 * v * v,
+        ))
+
+    if exact_data:
+        rows.append((
+            "Exact Backtracking Settlement", "O(2^N) [N<=12]",
+            exact_data["sizes"], exact_data["exact_times"],
+            lambda n: 2**n,
+        ))
+
     for name, claim, sizes, measured, fn in rows:
         v = verdict(sizes, measured, fn)
-        print(f"  {name:<35} {claim:<12} {v}")
+        print(f"  {name:<35} {claim:<14} {v}")
 
     print("="*70)
     print(f"  Plots saved to: benchmarks/results/")
@@ -502,11 +654,12 @@ def print_summary_table(warshall_data, settlement_data, cycle_data, risk_data):
 def run():
     random.seed(42)   # reproducible results
 
-    # Sizes to test — small enough to be fast, large enough to show the curve
     warshall_sizes   = [5, 10, 15, 20, 25, 30, 35, 40, 50, 60]
     settlement_sizes = [10, 25, 50, 75, 100, 150, 200, 300, 500, 750]
     cycle_sizes      = [5, 10, 15, 20, 30, 40, 50, 60, 75, 100]
     risk_sizes       = [10, 25, 50, 100, 200, 500, 1000, 2000, 5000, 10000]
+    exact_sizes      = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    scc_sizes        = [10, 20, 30, 40, 50, 75, 100, 125, 150]
     months           = 24
 
     print("=" * 60)
@@ -518,6 +671,8 @@ def run():
     settlement_data = benchmark_settlement(settlement_sizes)
     cycle_data      = benchmark_cycle_detection(cycle_sizes)
     risk_data       = benchmark_risk_engine(risk_sizes, months=months)
+    exact_data      = benchmark_exact_vs_greedy(exact_sizes)
+    scc_data        = benchmark_scc_vs_warshall(scc_sizes)
 
     print("\n  Generating plots ...")
     save_warshall_plot(warshall_data)
@@ -525,8 +680,10 @@ def run():
     save_cycle_plot(cycle_data)
     save_risk_plot(risk_data, months=months)
     save_combined_plot(warshall_data, settlement_data, cycle_data, risk_data, months=months)
+    save_exact_vs_greedy_plot(exact_data)
+    save_scc_vs_warshall_plot(scc_data)
 
-    print_summary_table(warshall_data, settlement_data, cycle_data, risk_data)
+    print_summary_table(warshall_data, settlement_data, cycle_data, risk_data, exact_data, scc_data)
 
 
 if __name__ == "__main__":

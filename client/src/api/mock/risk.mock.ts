@@ -281,4 +281,18 @@ export const riskMock = {
       },
     };
   },
+
+  // Simulated Socket Emitter for risk alert events
+  emitMockRiskFlag: (merchantId: string, riskScore: number, riskLabel: RiskLabel = 'HIGH') => {
+    return {
+      event: 'risk:flagged',
+      payload: {
+        merchantId,
+        riskScore,
+        riskLabel,
+        computedAt: new Date().toISOString(),
+      },
+    };
+  },
 };
+

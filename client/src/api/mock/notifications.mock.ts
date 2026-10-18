@@ -89,4 +89,18 @@ export const notificationsMock = {
       markedCount,
     };
   },
+
+  // Simulated Socket Emitter for mock environment
+  emitMockNotification: (message: string, type: string = 'notification:new'): Notification => {
+    const newNotif: Notification = {
+      id: `mock-notif-${Date.now()}`,
+      type,
+      message,
+      readAt: null,
+      createdAt: new Date().toISOString(),
+    };
+    inMemoryNotifications.unshift(newNotif);
+    return newNotif;
+  },
 };
+

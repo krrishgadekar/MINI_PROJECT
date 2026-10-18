@@ -5,6 +5,7 @@ import Layout from "./components/Layout";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
+import Overview from "./pages/Overview";
 import Risk from "./pages/Risk";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
@@ -93,7 +94,11 @@ export default function App() {
                 }
               >
                 {/* FE-01 Information Architecture */}
-                <Route index element={<Dashboard />} />
+                <Route index element={<Overview />} />
+                <Route
+                  path="dashboard"
+                  element={<Dashboard />}
+                />
                 <Route
                   path="network"
                   element={

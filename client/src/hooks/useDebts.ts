@@ -42,6 +42,17 @@ export function useConfirmDebt() {
   });
 }
 
+export function useRejectDebt() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.debts.reject(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.debts.all });
+    },
+  });
+}
+
+
 export function useRecordPayment() {
   const queryClient = useQueryClient();
   return useMutation({

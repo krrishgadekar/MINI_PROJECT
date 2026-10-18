@@ -19,7 +19,11 @@ const start = async (): Promise<void> => {
   // 4. Attach Socket.io
   initSocket(httpServer);
 
-  // 5. Start listening
+  // 5. Start background cron jobs
+  const { startDueDateScheduler } = await import('./services/dueDateJob');
+  startDueDateScheduler();
+
+  // 6. Start listening
   httpServer.listen(PORT, () => {
     console.log(`🚀 CreditFlow backend running at http://localhost:${PORT}`);
     console.log(`🐍 Python engine expected at ${process.env.PYTHON_ENGINE_URL}`);

@@ -35,3 +35,6 @@ export const protect = async (
     res.status(401).json({ message: 'Invalid or expired token.' });
   }
 };
+
+export const requireAuth = protect;
+

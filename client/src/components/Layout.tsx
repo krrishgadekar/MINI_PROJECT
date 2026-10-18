@@ -3,6 +3,7 @@ import Sidebar from './Sidebar';
 import { Menu, Bell, Sparkles } from 'lucide-react';
 import { useUiStore } from '../store/useUiStore';
 import { useNotifications } from '../hooks/useNotifications';
+import { useSocket } from '../hooks/useSocket';
 
 /**
  * Layout — App shell with responsive sidebar + topbar + content area.
@@ -12,6 +13,9 @@ export default function Layout() {
   const navigate = useNavigate();
   const { data: notifData } = useNotifications();
   const unreadCount = notifData?.unreadCount ?? 0;
+
+  // Mount realtime Socket.io connection once for the entire app
+  useSocket();
 
   return (
     <div className="app-layout">

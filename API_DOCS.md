@@ -280,15 +280,25 @@ Rotate group invite code to prevent unauthorized joins.
 
 ### 7.5 Debts v2 Endpoints (`/api/debts`)
 
-#### `GET /debts?scope=mine|all&status=&page=&limit=`
-Fetch debts in the current tenant group.
+#### `GET /debts?scope=mine|all&status=&page=&limit=&sort=&q=`
+Fetch debts in the current tenant group with sorting, filtering, and pagination.
 - **Headers**: `Authorization: Bearer <token>`, `X-Group-Id: <id>`
+- **Query Params**:
+  - `scope`: `mine` (default for members) | `all` (admin/owner only)
+  - `status`: `active` | `pending` | `settled` | `disputed` | `cancelled` | `overdue`
+  - `q`: Search merchant name or invoice note
+  - `sort`: Field and direction (e.g. `createdAt:desc`, `amount:asc`, `dueDate:asc`)
+  - `page`: Page number (default 1)
+  - `limit`: Page size (default 20, max 100)
 - **Role Rules**: `all` is admin-only; `member` can only query `scope=mine`.
 - **Returns (200)**:
 ```json
 {
   "success": true,
   "count": 1,
+  "total": 1,
+  "page": 1,
+  "totalPages": 1,
   "debts": [
     {
       "_id": "66123abc456def7890123888",
@@ -446,10 +456,11 @@ Records a partial or settlement payment against an active debt using CAS optimis
   "amount": 2500,
   "expectedVersion": 1,
   "kind": "partial",
-  "note": "UPI payment #992812"
+  "note": "UPI payment #992812",
+  "idempotencyKey": "idemp-992812-uuid"
 }
 ```
-- **Returns (201)**:
+- **Returns (201 / 200 on Idempotent Replay)**:
 ```json
 {
   "success": true,
@@ -478,15 +489,24 @@ Records a partial or settlement payment against an active debt using CAS optimis
 
 ### 7.7 Audit Log Endpoints (`/api/audit`)
 
-#### `GET /audit?entityId=&page=&limit=`
+#### `GET /audit?entityId=&entityType=&page=&limit=&sort=`
 Retrieves tenant-isolated audit log entries.
 - **Headers**: `Authorization: Bearer <token>`, `X-Group-Id: <id>`
+- **Query Params**:
+  - `entityId`: Filter events for a specific resource ID
+  - `entityType`: Filter events by type (`Debt`, `Payment`, `Settlement`, `RiskAssessment`)
+  - `sort`: Field and direction (default: `createdAt:desc`)
+  - `page`: Page number (default: 1)
+  - `limit`: Page limit (default: 20, max: 100)
 - **Role Rules**: `admin` / `owner` sees all group audit logs; `member` sees logs where they are the actor or entity party.
 - **Returns (200)**:
 ```json
 {
   "success": true,
   "count": 1,
+  "total": 1,
+  "page": 1,
+  "totalPages": 1,
   "audit": [
     {
       "_id": "66123abc456def7890123444",

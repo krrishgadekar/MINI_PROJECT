@@ -165,7 +165,7 @@ export interface Membership {
   joinedAt?: string;
 }
 
-export type DebtStatus = 'pending' | 'active' | 'settled' | 'disputed' | 'netted';
+export type DebtStatus = 'pending' | 'active' | 'settled' | 'disputed' | 'netted' | 'cancelled';
 
 export interface Debt {
   _id: string;
@@ -178,6 +178,7 @@ export interface Debt {
   dueDate?: string;
   note?: string;
   confirmedBy?: string;
+  createdBy?: string;
   version: number;
   createdAt?: string;
   updatedAt?: string;

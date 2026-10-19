@@ -10,7 +10,9 @@
 
 import axios from "axios";
 
-const API_BASE_URL = "http://localhost:4000/api";
+const API_BASE_URL =
+  (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_API_BASE_URL) ||
+  "http://localhost:4000/api";
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -109,6 +111,22 @@ apiClient.interceptors.response.use(
         isRefreshing = false;
       }
     }
+
+    if (error.response?.status === 403) {
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("creditflow:forbidden-group", {
+            detail: {
+              code: error.response?.data?.code || "FORBIDDEN_GROUP",
+              message:
+                error.response?.data?.message ||
+                "Access denied. You do not have permission for this group action.",
+            },
+          })
+        );
+      }
+    }
+
     return Promise.reject(error);
   }
 );

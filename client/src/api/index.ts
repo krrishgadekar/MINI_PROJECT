@@ -17,15 +17,16 @@ export * from './contract';
 export * from './keys';
 
 const rawMockDomains: string =
-  (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_MOCK_DOMAINS) ||
-  'risk,settlement,graph,notifications';
+  (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_MOCK_DOMAINS !== undefined)
+    ? import.meta.env.VITE_MOCK_DOMAINS
+    : '';
 
 const isAllMock = rawMockDomains === 'all' || rawMockDomains === '*';
-const isNoneMock = rawMockDomains === 'none';
+const isNoneMock = rawMockDomains === 'none' || rawMockDomains === '' || !rawMockDomains;
 
 const mockDomainList = isAllMock || isNoneMock
   ? []
-  : rawMockDomains.split(',').map((d: string) => d.trim().toLowerCase());
+  : rawMockDomains.split(',').map((d: string) => d.trim().toLowerCase()).filter(Boolean);
 
 /**
  * Checks whether a specific domain is configured to use mock data.

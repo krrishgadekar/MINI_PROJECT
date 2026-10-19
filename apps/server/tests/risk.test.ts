@@ -11,6 +11,8 @@ jest.mock('../src/realtime/socket', () => ({
   getIO: () => ({
     emit: jest.fn(),
   }),
+  emitToGroup: jest.fn(),
+  emitToMerchant: jest.fn(),
 }));
 
 jest.mock('axios');

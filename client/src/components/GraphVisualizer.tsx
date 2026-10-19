@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ForceGraph2D from "react-force-graph-2d";
 import { bfs, buildAdjacencyList } from "../graph/traversal";
 import type { DebtEdge, RiskScoreResponse, GraphNode, GraphLink } from "../types";
@@ -10,6 +10,7 @@ interface GraphVisualizerProps {
   debts: DebtEdge[];
   riskProfiles?: RiskScoreResponse[];
   height?: number;
+  contagionSource?: string;
 }
 
 const RISK_COLORS: Record<string, string> = {
@@ -39,6 +40,7 @@ export default function GraphVisualizer({
   debts,
   riskProfiles = [],
   height = 450,
+  contagionSource,
 }: GraphVisualizerProps) {
   const fgRef = useRef<any>(null);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
@@ -130,6 +132,28 @@ export default function GraphVisualizer({
     [selectedNode, adjacencyList, debts]
   );
 
+  useEffect(() => {
+    if (contagionSource) {
+      const match = merchants.find(
+        (m) => m.toLowerCase() === contagionSource.toLowerCase() || m.replace(/_/g, ' ').toLowerCase() === contagionSource.toLowerCase()
+      );
+      if (match) {
+        setSelectedNode(match);
+        const reachable = bfs(adjacencyList, match);
+        const newHighlighted = new Set([match, ...reachable]);
+        setHighlightedNodes(newHighlighted);
+
+        const edgeKeys = new Set<string>();
+        debts.forEach((d) => {
+          if (newHighlighted.has(d.debtor) && newHighlighted.has(d.creditor)) {
+            edgeKeys.add(`${d.debtor}→${d.creditor}`);
+          }
+        });
+        setHighlightedEdges(edgeKeys);
+      }
+    }
+  }, [contagionSource, adjacencyList, debts, merchants]);
+
   const handleReset = useCallback(() => {
     setSelectedNode(null);
     setHighlightedNodes(new Set());
@@ -158,17 +182,29 @@ export default function GraphVisualizer({
 
       if (isSelected) {
         // Glow effect for selected node
-        ctx.shadowColor = HIGHLIGHT_NODE_COLOR;
-        ctx.shadowBlur = 16;
+        ctx.shadowColor = contagionSource ? '#ef4444' : HIGHLIGHT_NODE_COLOR;
+        ctx.shadowBlur = 18;
       }
 
-      ctx.fillStyle = !isHighlighted
-        ? "rgba(100, 116, 139, 0.3)"
-        : riskCat
-        ? RISK_COLORS[riskCat]
-        : DEFAULT_NODE_COLOR;
+      if (contagionSource && isHighlighted) {
+        if (nodeId === selectedNode) {
+          ctx.fillStyle = '#ef4444'; // Source failed merchant in high-contrast red
+          ctx.shadowColor = '#ef4444';
+          ctx.shadowBlur = 18;
+        } else {
+          ctx.fillStyle = '#f59e0b'; // Cascade exposed merchant in warning amber
+          ctx.shadowColor = '#f59e0b';
+          ctx.shadowBlur = 12;
+        }
+      } else {
+        ctx.fillStyle = !isHighlighted
+          ? "rgba(100, 116, 139, 0.3)"
+          : riskCat
+          ? RISK_COLORS[riskCat]
+          : DEFAULT_NODE_COLOR;
+      }
 
-      ctx.globalAlpha = isHighlighted ? 1 : 0.25;
+      ctx.globalAlpha = isHighlighted ? 1 : 0.2;
       ctx.fill();
 
       // Border

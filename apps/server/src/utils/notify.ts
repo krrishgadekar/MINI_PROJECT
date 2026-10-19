@@ -1,4 +1,4 @@
-import { Types } from 'mongoose';
+import mongoose, { Types } from 'mongoose';
 import { Notification } from '../models/Notification';
 import { emitToMerchant } from '../realtime/socket';
 
@@ -25,6 +25,20 @@ export const notify = async (
     if (!merchantId) continue;
 
     try {
+      if (mongoose.connection && mongoose.connection.readyState !== 1) {
+        emitToMerchant(merchantId, 'notification:new', {
+          id: new Types.ObjectId().toString(),
+          groupId,
+          merchantId,
+          type,
+          message,
+          refType: ref?.refType,
+          refId: ref?.refId,
+          readAt: null,
+          createdAt: new Date(),
+        });
+        continue;
+      }
       const docData: any = {
         merchantId: new Types.ObjectId(merchantId),
         type,

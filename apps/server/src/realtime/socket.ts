@@ -1,6 +1,8 @@
 import { Server as HttpServer } from 'http';
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
+import { Membership } from '../models/Group';
 import { getClientOrigins } from '../config/cors';
 import { getOrCreateThrottler, removeThrottler } from './throttler';
 
@@ -51,6 +53,29 @@ export const initSocket = (httpServer: HttpServer): SocketIOServer => {
       socket.data.groupId = groupId;
       console.log(`   ↳ Socket ${socket.id} auto-joined group:${groupId}`);
     }
+
+    // Auto-join all groups merchant is an active member of
+    if (mongoose.connection && mongoose.connection.readyState === 1) {
+      Membership.find({ merchantId, status: 'active' })
+        .select('groupId')
+        .then((memberships) => {
+          memberships.forEach((m) => socket.join(`group:${m.groupId.toString()}`));
+        })
+        .catch(() => {});
+    }
+
+    // Allow dynamic group room switching
+    socket.on('group:join', (data: { groupId?: string }) => {
+      if (data?.groupId) {
+        socket.join(`group:${data.groupId}`);
+      }
+    });
+
+    socket.on('group:leave', (data: { groupId?: string }) => {
+      if (data?.groupId) {
+        socket.leave(`group:${data.groupId}`);
+      }
+    });
 
     // Initialize AIMD throttler for this socket
     const throttler = getOrCreateThrottler(socket);

@@ -307,6 +307,50 @@ describe('Auth — PATCH /api/auth/me', () => {
   });
 });
 
+describe('Groups API — GET /api/groups/:id & POST /api/groups/:id/invite', () => {
+  it('allows group member to fetch group details and member list', async () => {
+    const res = await request(app)
+      .get(`/api/groups/${groupId}`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.group._id).toBe(groupId);
+    expect(Array.isArray(res.body.members)).toBe(true);
+    expect(res.body.members.length).toBeGreaterThan(0);
+  });
+
+  it('rejects outsider fetching group details with 403', async () => {
+    const res = await request(app)
+      .get(`/api/groups/${groupId}`)
+      .set('Authorization', `Bearer ${outsiderToken}`);
+
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('FORBIDDEN_GROUP');
+  });
+
+  it('returns invite code via POST /api/groups/:id/invite for member', async () => {
+    const res = await request(app)
+      .post(`/api/groups/${groupId}/invite`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ email: 'newperson@test.com' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.inviteCode).toBeDefined();
+  });
+
+  it('rejects outsider calling /invite with 403', async () => {
+    const res = await request(app)
+      .post(`/api/groups/${groupId}/invite`)
+      .set('Authorization', `Bearer ${outsiderToken}`)
+      .send({ email: 'newperson@test.com' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('FORBIDDEN_GROUP');
+  });
+});
+
 describe('BE-07 — CRITICAL riskCategory accepted', () => {
   it('can create a risk assessment with CRITICAL riskCategory', async () => {
     const { RiskAssessment } = require('../src/models/RiskAssessment');

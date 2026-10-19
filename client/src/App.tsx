@@ -1,5 +1,5 @@
-import React, { Suspense, lazy } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import React, { Suspense, lazy, useEffect } from "react";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
@@ -11,7 +11,7 @@ import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
 import Documentation from "./pages/Documentation";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
-import { ToastProvider, ErrorBoundary, Skeleton } from "./components/ui";
+import { ToastProvider, ErrorBoundary, Skeleton, useToast } from "./components/ui";
 import { AuthProvider, useAuth } from "./state/AuthProvider";
 import { GroupProvider } from "./state/GroupProvider";
 
@@ -42,6 +42,27 @@ function PageFallback() {
       <Skeleton height={280} />
     </div>
   );
+}
+
+function ForbiddenGroupHandler() {
+  const navigate = useNavigate();
+  const toast = useToast();
+
+  useEffect(() => {
+    const handleForbidden = (e: Event) => {
+      const customEvent = e as CustomEvent<{ code?: string; message?: string }>;
+      const message = customEvent.detail?.message || "Access denied: You are not a member of this group.";
+      toast.error(message);
+      navigate("/groups", { replace: true });
+    };
+
+    window.addEventListener("creditflow:forbidden-group", handleForbidden);
+    return () => {
+      window.removeEventListener("creditflow:forbidden-group", handleForbidden);
+    };
+  }, [navigate, toast]);
+
+  return null;
 }
 
 function GroupProviderWrapper({ children }: { children: React.ReactNode }) {
@@ -83,6 +104,7 @@ export default function App() {
         <ErrorBoundary>
           <AuthProvider>
             <BrowserRouter>
+              <ForbiddenGroupHandler />
               <GroupProviderWrapper>
                 <Routes>
               {/* Public routes */}

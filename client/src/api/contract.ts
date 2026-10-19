@@ -528,8 +528,12 @@ export interface Api {
     list(): Promise<GroupsResponse>;
     get(id: string): Promise<GroupDetailResponse>;
     create(data: CreateGroupRequest): Promise<GroupResponse>;
-    join(id: string, data: JoinGroupRequest): Promise<MembershipResponse>;
+    join(idOrCode: string, data?: JoinGroupRequest): Promise<MembershipResponse>;
     invite(id: string, data: InviteGroupRequest): Promise<InviteResponse>;
+    getMembers(groupId: string): Promise<{ success: boolean; members: any[] }>;
+    updateRole(groupId: string, merchantId: string, role: Role): Promise<{ success: boolean; membership: any }>;
+    removeMember(groupId: string, merchantId: string): Promise<{ success: boolean; message: string }>;
+    rotateInviteCode(groupId: string): Promise<InviteResponse>;
   };
 
   // Slice A: Debts & Invoicing

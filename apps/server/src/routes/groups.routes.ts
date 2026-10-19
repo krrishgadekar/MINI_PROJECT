@@ -3,10 +3,12 @@ import {
   createGroup,
   listGroups,
   joinGroup,
+  getGroupById,
   listMembers,
   updateMemberRole,
   removeMember,
   rotateInviteCode,
+  inviteMember,
 } from '../controllers/groups.controller';
 import { protect } from '../middleware/auth.middleware';
 import { requireGroup, requireRole } from '../middleware/group.middleware';
@@ -20,8 +22,19 @@ groupsRouter.use(protect);
 groupsRouter.post('/', createGroup);
 groupsRouter.get('/', listGroups);
 groupsRouter.post('/join', joinGroup);
+groupsRouter.post('/:id/join', joinGroup);
 
 // Routes that DO require group membership (X-Group-Id header)
+groupsRouter.get(
+  '/:id',
+  (req, _res, next) => {
+    req.headers['x-group-id'] = req.params.id;
+    next();
+  },
+  requireGroup,
+  getGroupById,
+);
+
 groupsRouter.get(
   '/:id/members',
   (req, _res, next) => {
@@ -64,3 +77,14 @@ groupsRouter.post(
   requireRole('admin'),
   rotateInviteCode,
 );
+
+groupsRouter.post(
+  '/:id/invite',
+  (req, _res, next) => {
+    req.headers['x-group-id'] = req.params.id;
+    next();
+  },
+  requireGroup,
+  inviteMember,
+);
+

@@ -16,6 +16,7 @@ import type {
   GroupResponse,
   MembershipResponse,
   InviteResponse,
+  Role,
   CreateGroupRequest,
   JoinGroupRequest,
   InviteGroupRequest,
@@ -103,12 +104,29 @@ export const realApi: Api = {
       const res = await apiClient.post('/groups', data);
       return res.data;
     },
-    join: async (id: string, data: JoinGroupRequest): Promise<MembershipResponse> => {
-      const res = await apiClient.post(`/groups/${id}/join`, data);
+    join: async (idOrCode: string, data?: JoinGroupRequest): Promise<MembershipResponse> => {
+      const inviteCode = data?.inviteCode || idOrCode;
+      const res = await apiClient.post('/groups/join', { inviteCode });
       return res.data;
     },
     invite: async (id: string, data: InviteGroupRequest): Promise<InviteResponse> => {
       const res = await apiClient.post(`/groups/${id}/invite`, data);
+      return res.data;
+    },
+    getMembers: async (groupId: string): Promise<{ success: boolean; members: any[] }> => {
+      const res = await apiClient.get(`/groups/${groupId}/members`);
+      return res.data;
+    },
+    updateRole: async (groupId: string, merchantId: string, role: Role): Promise<{ success: boolean; membership: any }> => {
+      const res = await apiClient.patch(`/groups/${groupId}/members/${merchantId}`, { role });
+      return res.data;
+    },
+    removeMember: async (groupId: string, merchantId: string): Promise<{ success: boolean; message: string }> => {
+      const res = await apiClient.delete(`/groups/${groupId}/members/${merchantId}`);
+      return res.data;
+    },
+    rotateInviteCode: async (groupId: string): Promise<InviteResponse> => {
+      const res = await apiClient.post(`/groups/${groupId}/invite-code/rotate`);
       return res.data;
     },
   },

@@ -20,22 +20,94 @@ const apiClient = axios.create({
   },
 });
 
-// Attach JWT token to every request (if available)
+// Attach JWT token and X-Group-Id to every request (if available)
 apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem("creditflow_token");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  const activeGroup = localStorage.getItem("creditflow_active_group");
+  if (activeGroup) {
+    config.headers["X-Group-Id"] = activeGroup;
+  }
   return config;
 });
 
-// Handle 401 responses (expired token)
+// Refresh token state
+let isRefreshing = false;
+let failedQueue: Array<{
+  resolve: (value?: unknown) => void;
+  reject: (reason?: any) => void;
+}> = [];
+
+const processQueue = (error: any, token: string | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+
+// Handle 401 responses with refresh token flow (once)
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem("creditflow_token");
-      window.location.href = "/login";
+  async (error) => {
+    const originalRequest = error.config;
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      if (
+        originalRequest.url?.includes("/auth/refresh") ||
+        originalRequest.url?.includes("/auth/login")
+      ) {
+        return Promise.reject(error);
+      }
+
+      const refreshToken = localStorage.getItem("creditflow_refresh_token");
+      if (!refreshToken) {
+        localStorage.removeItem("creditflow_token");
+        localStorage.removeItem("creditflow_refresh_token");
+        localStorage.removeItem("creditflow_active_group");
+        return Promise.reject(error);
+      }
+
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then((token) => {
+            originalRequest.headers.Authorization = `Bearer ${token}`;
+            return apiClient(originalRequest);
+          })
+          .catch((err) => Promise.reject(err));
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      try {
+        const { data } = await axios.post(`${API_BASE_URL}/auth/refresh`, {
+          refreshToken,
+        });
+        const newAccessToken = data.accessToken;
+        localStorage.setItem("creditflow_token", newAccessToken);
+        if (data.refreshToken) {
+          localStorage.setItem("creditflow_refresh_token", data.refreshToken);
+        }
+        apiClient.defaults.headers.common.Authorization = `Bearer ${newAccessToken}`;
+        processQueue(null, newAccessToken);
+        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+        return apiClient(originalRequest);
+      } catch (refreshError) {
+        processQueue(refreshError, null);
+        localStorage.removeItem("creditflow_token");
+        localStorage.removeItem("creditflow_refresh_token");
+        localStorage.removeItem("creditflow_active_group");
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
+      }
     }
     return Promise.reject(error);
   }

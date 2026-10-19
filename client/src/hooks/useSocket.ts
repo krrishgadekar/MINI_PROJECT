@@ -62,7 +62,7 @@ export const useSocket = (): void => {
       processEvent('risk:flagged', payload);
     });
 
-    socket.on('disconnect', (reason) => {
+    socket.on('disconnect', (reason: string) => {
       console.log('🔌 Socket disconnected:', reason);
     });
 

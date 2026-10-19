@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { Merchant } from '../models/Merchant';
+import { Membership, IGroup } from '../models/Group';
 import { AuthRequest } from '../middleware/auth.middleware';
 
 // ── Validation schemas ──────────────────────────────────────────────────────
@@ -146,15 +147,70 @@ export const refresh = async (req: Request, res: Response, next: NextFunction): 
  */
 export const getMe = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
+    // Fetch groups + roles for the authenticated merchant
+    const memberships = await Membership.find({ merchantId: req.merchant!._id })
+      .populate<{ groupId: IGroup }>('groupId', 'name type ownerId inviteCode createdAt');
+
+    const groups = memberships.map((m) => {
+      const g = m.groupId as unknown as IGroup;
+      return {
+        _id: g?._id,
+        name: g?.name,
+        type: g?.type,
+        ownerId: g?.ownerId,
+        role: m.role,
+      };
+    });
+
     res.json({
       success: true,
       merchant: {
         id: req.merchant?.id,
         name: req.merchant?.name,
         email: req.merchant?.email,
+        phone: req.merchant?.phone,
+        businessName: req.merchant?.businessName,
         riskProfile: req.merchant?.riskProfile,
       },
+      groups,
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ── PATCH /api/auth/me — Update profile ─────────────────────────────────────
+
+const UpdateMeSchema = z.object({
+  name: z.string().min(2).optional(),
+  phone: z.string().optional(),
+  businessName: z.string().optional(),
+});
+
+/**
+ * PATCH /api/auth/me  — Protected
+ * Body: { name?, phone?, businessName? }
+ */
+export const updateMe = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const parsed = UpdateMeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ success: false, code: 'VALIDATION', message: 'Validation error', errors: parsed.error.flatten() });
+      return;
+    }
+
+    const updates: Record<string, unknown> = {};
+    if (parsed.data.name !== undefined) updates.name = parsed.data.name;
+    if (parsed.data.phone !== undefined) updates.phone = parsed.data.phone;
+    if (parsed.data.businessName !== undefined) updates.businessName = parsed.data.businessName;
+
+    const merchant = await Merchant.findByIdAndUpdate(
+      req.merchant!._id,
+      { $set: updates },
+      { new: true, select: '-passwordHash' },
+    );
+
+    res.json({ success: true, merchant });
   } catch (error) {
     next(error);
   }

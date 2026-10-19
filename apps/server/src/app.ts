@@ -8,6 +8,7 @@ import { debtsRouter } from './routes/debts.routes';
 import { settlementRouter } from './routes/settlement.routes';
 import { riskRouter } from './routes/risk.routes';
 import notificationRouter from './routes/notification.routes';
+import { groupsRouter } from './routes/groups.routes';
 import { errorHandler } from './middleware/errorHandler';
 import { getClientOrigins } from './config/cors';
 
@@ -53,6 +54,7 @@ export const createApp = (): Application => {
   app.use('/api/settlement', settlementRouter);
   app.use('/api/risk', riskRouter);
   app.use('/api/notifications', notificationRouter);
+  app.use('/api/groups', groupsRouter);
 
   // ── Global error handler (must be last) ────────────────────────────────────
   app.use(errorHandler);

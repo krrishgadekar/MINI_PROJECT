@@ -20,8 +20,61 @@ Logs in a merchant.
 - **Returns**: `{ success: true, accessToken, refreshToken, merchant }`
 
 ### `GET /auth/me`
-Fetches the currently authenticated merchant's details.
-- **Returns**: `{ success: true, merchant }`
+Fetches the currently authenticated merchant's details along with their joined tenant groups and roles.
+- **Returns**: `{ success: true, merchant: {...}, groups: [{ _id, name, type, ownerId, inviteCode, createdAt, role }] }`
+
+### `PATCH /auth/me`
+Updates profile information for the authenticated merchant.
+- **Body**: `{ "name"?: string, "phone"?: string, "businessName"?: string }`
+- **Returns**: `{ success: true, merchant: {...} }`
+
+---
+
+## 1.1 Tenant Groups (`/api/groups`)
+Tenant coalitions provide strict data isolation for debts, risk, and settlements.
+Scoped requests must pass the `X-Group-Id: <groupId>` header.
+
+### `POST /groups`
+Creates a new tenant group. The creator is automatically assigned the `owner` role.
+- **Body**: `{ "name": "Crawford Market Circle", "type": "market" | "supply_chain" | "friends" | "other" }`
+- **Returns**: `{ success: true, group: { _id, name, type, ownerId, inviteCode, createdAt } }`
+
+### `GET /groups`
+Lists all groups where the authenticated merchant is a member, including their role.
+- **Returns**: `{ success: true, count: number, groups: [{ _id, name, type, ownerId, inviteCode, createdAt, role }] }`
+
+### `POST /groups/join`
+Joins a group using an alphanumeric invite code.
+- **Body**: `{ "inviteCode": "CRAWFORD2026" }`
+- **Returns**: `{ success: true, membership: { _id, groupId, merchantId, role, joinedAt } }`
+
+### `GET /groups/:id/members`
+Fetches all merchants belonging to the group (caller must be a group member).
+- **Returns**: `{ success: true, count: number, members: [{ _id, groupId, merchantId: {...}, role, joinedAt }] }`
+
+### `PATCH /groups/:id/members/:merchantId`
+Updates a member's role within the group. Requires `admin` or `owner` role.
+- **Body**: `{ "role": "admin" | "member" }`
+- **Returns**: `{ success: true, membership: {...} }`
+
+### `DELETE /groups/:id/members/:merchantId`
+Removes a member from the group. Can be performed by admins/owners, or by a member leaving the group. Group owner cannot leave without transferring ownership.
+- **Returns**: `{ success: true, message: "Member removed from group" }`
+
+### `POST /groups/:id/invite-code/rotate`
+Generates a new random invite code for the group, invalidating the previous code. Requires `admin` or `owner` role.
+- **Returns**: `{ success: true, inviteCode: string }`
+
+---
+
+## 1.2 Tenancy Header Requirement (`X-Group-Id`)
+The following routes enforce strict tenant scoping via `requireGroup` middleware:
+- `/api/debts` (listing, creation, updates)
+- `/api/merchants` (scoping to group members)
+- `/api/settlement` (`/`, `/cycles`, `/net-cycle`, `/confirm/:batchId`)
+- `/api/risk/group`, `/api/risk/merchant/:id`, `/api/risk/recompute`, `/api/risk/contagion`
+
+If `X-Group-Id` is missing or the merchant is not a member of the group, a `403 FORBIDDEN_GROUP` error is returned.
 
 ---
 

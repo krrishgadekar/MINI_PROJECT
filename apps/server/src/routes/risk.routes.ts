@@ -10,18 +10,19 @@ import {
   simulateContagion,
 } from '../controllers/risk.controller';
 import { protect } from '../middleware/auth.middleware';
+import { requireGroup } from '../middleware/group.middleware';
 
 export const riskRouter = Router();
 
 riskRouter.use(protect);
 
-// v2 Endpoints
-riskRouter.get('/group', getGroupRisk);
-riskRouter.get('/merchant/:id', getMerchantRisk);
-riskRouter.post('/recompute', recomputeGroupRisk);
-riskRouter.post('/contagion', simulateContagion);
+// v2 Endpoints — group-scoped
+riskRouter.get('/group', requireGroup, getGroupRisk);
+riskRouter.get('/merchant/:id', requireGroup, getMerchantRisk);
+riskRouter.post('/recompute', requireGroup, recomputeGroupRisk);
+riskRouter.post('/contagion', requireGroup, simulateContagion);
 
-// Legacy Endpoints
+// Legacy Endpoints (no group required)
 riskRouter.post('/score/:merchantId', scoreMerchant);
 riskRouter.get('/score/:merchantId', getLatestRisk);
 riskRouter.post('/portfolio', scorePortfolio);

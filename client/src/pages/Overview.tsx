@@ -35,22 +35,22 @@ export default function Overview() {
   const unreadCount = notifData?.unreadCount || 0;
 
   // Compute metrics
-  const activeDebts = useMemo(() => debts.filter((d) => d.status === 'active'), [debts]);
+  const activeDebts = useMemo(() => debts.filter((d: any) => d.status === 'active'), [debts]);
   const totalOutstanding = useMemo(
-    () => activeDebts.reduce((sum, d) => sum + d.amount, 0),
+    () => activeDebts.reduce((sum: number, d: any) => sum + d.amount, 0),
     [activeDebts],
   );
 
   const now = new Date();
   const overdueDebts = useMemo(
-    () => activeDebts.filter((d) => d.dueDate && new Date(d.dueDate) < now),
+    () => activeDebts.filter((d: any) => d.dueDate && new Date(d.dueDate) < now),
     [activeDebts, now],
   );
 
   const dueSoonDebts = useMemo(() => {
     const sevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
     return activeDebts.filter(
-      (d) => d.dueDate && new Date(d.dueDate) >= now && new Date(d.dueDate) <= sevenDays,
+      (d: any) => d.dueDate && new Date(d.dueDate) >= now && new Date(d.dueDate) <= sevenDays,
     );
   }, [activeDebts, now]);
 
@@ -69,7 +69,7 @@ export default function Overview() {
       'Elevated Risk (>0.66)': 0,
     };
 
-    activeDebts.forEach((d) => {
+    activeDebts.forEach((d: any) => {
       if (d.amount > 10000) buckets['Elevated Risk (>0.66)'] += d.amount;
       else if (d.amount > 4000) buckets['Medium Risk (0.33-0.66)'] += d.amount;
       else buckets['Low Risk (<0.33)'] += d.amount;
@@ -140,7 +140,7 @@ export default function Overview() {
                 {overdueDebts.length} Overdue Obligation{overdueDebts.length > 1 ? 's' : ''} Detected
               </div>
               <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
-                Total overdue balance: ₹{overdueDebts.reduce((s, d) => s + d.amount, 0).toLocaleString()}. Immediate settlement or netting recommended.
+                Total overdue balance: ₹{overdueDebts.reduce((s: number, d: any) => s + d.amount, 0).toLocaleString()}. Immediate settlement or netting recommended.
               </div>
             </div>
           </div>
@@ -197,7 +197,7 @@ export default function Overview() {
             {isLoading ? '...' : dueSoonDebts.length}
           </div>
           <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', marginTop: 4 }}>
-            ₹{dueSoonDebts.reduce((s, d) => s + d.amount, 0).toLocaleString()} upcoming liquidity demand
+            ₹{dueSoonDebts.reduce((s: number, d: any) => s + d.amount, 0).toLocaleString()} upcoming liquidity demand
           </div>
         </div>
 
@@ -288,7 +288,7 @@ export default function Overview() {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {dueSoonDebts.slice(0, 5).map((debt) => (
+              {dueSoonDebts.slice(0, 5).map((debt: any) => (
                 <div
                   key={debt._id}
                   onClick={() => navigate(`/ledger/${debt._id}`)}

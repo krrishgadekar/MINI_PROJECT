@@ -60,12 +60,15 @@ jest.mock('../src/services/pythonBridge', () => {
   };
 });
 
+import { Group, Membership } from '../src/models/Group';
+
 describe('Risk V2, Notifications & Cron Tests (Slice C)', () => {
   let mongoServer: MongoMemoryServer;
   let app: any;
   let token: string;
   let merchantAId: string;
   let merchantBId: string;
+  let groupId: string;
 
   beforeAll(async () => {
     mongoServer = await createMemoryServer();
@@ -83,6 +86,13 @@ describe('Risk V2, Notifications & Cron Tests (Slice C)', () => {
     token = regRes.body.accessToken;
     merchantAId = regRes.body.merchant.id;
 
+    // Create group for Merchant Alpha
+    const groupRes = await request(app)
+      .post('/api/groups')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Alpha Market Circle', type: 'market' });
+    groupId = groupRes.body.group._id;
+
     // Create second merchant
     const merchantB = await Merchant.create({
       name: 'Merchant Beta',
@@ -91,6 +101,12 @@ describe('Risk V2, Notifications & Cron Tests (Slice C)', () => {
       riskProfile: { riskScore: 0.15, riskCategory: 'LOW' },
     });
     merchantBId = merchantB.id;
+
+    await Membership.create({
+      groupId: new mongoose.Types.ObjectId(groupId),
+      merchantId: merchantB._id,
+      role: 'member',
+    });
   });
 
   afterAll(async () => {
@@ -103,7 +119,7 @@ describe('Risk V2, Notifications & Cron Tests (Slice C)', () => {
       // Seed payment events for merchant A
       await PaymentEvent.create([
         {
-          groupId: new mongoose.Types.ObjectId(),
+          groupId: new mongoose.Types.ObjectId(groupId),
           merchantId: new mongoose.Types.ObjectId(merchantAId),
           debtId: new mongoose.Types.ObjectId(),
           dueDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
@@ -112,7 +128,7 @@ describe('Risk V2, Notifications & Cron Tests (Slice C)', () => {
           delayDays: 14,
         },
         {
-          groupId: new mongoose.Types.ObjectId(),
+          groupId: new mongoose.Types.ObjectId(groupId),
           merchantId: new mongoose.Types.ObjectId(merchantAId),
           debtId: new mongoose.Types.ObjectId(),
           dueDate: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
@@ -125,7 +141,7 @@ describe('Risk V2, Notifications & Cron Tests (Slice C)', () => {
       const res = await request(app)
         .post('/api/risk/recompute')
         .set('Authorization', `Bearer ${token}`)
-        .set('X-Group-Id', 'group_market_1')
+        .set('X-Group-Id', groupId)
         .send();
 
       expect(res.status).toBe(200);
@@ -142,7 +158,7 @@ describe('Risk V2, Notifications & Cron Tests (Slice C)', () => {
       const res = await request(app)
         .get('/api/risk/group')
         .set('Authorization', `Bearer ${token}`)
-        .set('X-Group-Id', 'group_market_1');
+        .set('X-Group-Id', groupId);
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -153,7 +169,8 @@ describe('Risk V2, Notifications & Cron Tests (Slice C)', () => {
     test('GET /api/risk/merchant/:id returns single merchant risk with monthly history', async () => {
       const res = await request(app)
         .get(`/api/risk/merchant/${merchantAId}`)
-        .set('Authorization', `Bearer ${token}`);
+        .set('Authorization', `Bearer ${token}`)
+        .set('X-Group-Id', groupId);
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -168,6 +185,7 @@ describe('Risk V2, Notifications & Cron Tests (Slice C)', () => {
       await Debt.create({
         debtorId: new mongoose.Types.ObjectId(merchantAId),
         creditorId: new mongoose.Types.ObjectId(merchantBId),
+        groupId: new mongoose.Types.ObjectId(groupId),
         amount: 15000,
         originalAmount: 15000,
         status: 'active',
@@ -176,6 +194,7 @@ describe('Risk V2, Notifications & Cron Tests (Slice C)', () => {
       const res = await request(app)
         .post('/api/risk/contagion')
         .set('Authorization', `Bearer ${token}`)
+        .set('X-Group-Id', groupId)
         .send({
           failedMerchant: 'Merchant Alpha',
           lossGivenDefault: 1.0,

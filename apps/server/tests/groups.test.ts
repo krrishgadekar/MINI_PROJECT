@@ -11,6 +11,7 @@ jest.mock('../src/realtime/socket', () => ({
     to: jest.fn(() => ({ emit: jest.fn() })),
   }),
   emitToGroup: jest.fn(),
+  emitToMerchant: jest.fn(),
 }));
 
 const app = createApp();

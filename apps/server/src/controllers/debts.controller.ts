@@ -12,7 +12,8 @@ import { IdempotencyRecord } from '../models/Idempotency';
 import { casUpdate, withRetry } from '../concurrency/optimisticLock';
 import { audit } from '../utils/audit';
 import { parsePaginationParams } from '../utils/paginate';
-import { getIO } from '../realtime/socket';
+import { emitToGroup } from '../realtime/socket';
+import { notify } from '../utils/notify';
 import { AppError, ValidationError } from '../utils/errors';
 
 const CreateDebtSchema = z.object({
@@ -312,11 +313,12 @@ export const createDebt = async (
       creditorId: creditor._id,
     });
 
-    // Emit real-time event scoped to group
+    // Notify counterparty of debt request and emit group event
+    const callerId = req.merchant!._id.toString();
+    const counterpartyId = callerId === debtor._id.toString() ? creditor._id.toString() : debtor._id.toString();
     if (groupId) {
-      getIO().to(`group:${groupId}`).emit('debt:created', { debt: populated });
-    } else {
-      getIO().emit('debt:created', { debt: populated });
+      notify(groupId, counterpartyId, 'debt:requested', `New debt request of ₹${amount.toLocaleString()} from ${req.merchant!.name}`, { refType: 'debt', refId: debt._id.toString() }).catch(console.error);
+      emitToGroup(groupId, 'debt:created', { debt: populated });
     }
 
     res.status(201).json({ success: true, debt: populated });
@@ -403,10 +405,10 @@ export const confirmDebt = async (
     });
 
     const groupId = req.groupId;
+    const counterpartyId = callerId === debt.debtorId.toString() ? debt.creditorId.toString() : debt.debtorId.toString();
     if (groupId) {
-      getIO().to(`group:${groupId}`).emit('debt:updated', { debt: updated });
-    } else {
-      getIO().emit('debt:updated', { debt: updated });
+      notify(groupId, counterpartyId, 'debt:confirmed', `Debt obligation of ₹${debt.amount.toLocaleString()} was confirmed.`, { refType: 'debt', refId: debt._id.toString() }).catch(console.error);
+      emitToGroup(groupId, 'debt:updated', { debt: updated });
     }
 
     res.json({ success: true, debt: updated });
@@ -468,10 +470,10 @@ export const rejectDebt = async (
     });
 
     const groupId = req.groupId;
+    const counterpartyId = callerId === debt.debtorId.toString() ? debt.creditorId.toString() : debt.debtorId.toString();
     if (groupId) {
-      getIO().to(`group:${groupId}`).emit('debt:updated', { debt: updated });
-    } else {
-      getIO().emit('debt:updated', { debt: updated });
+      notify(groupId, counterpartyId, 'debt:rejected', `Debt request of ₹${debt.amount.toLocaleString()} was rejected.`, { refType: 'debt', refId: debt._id.toString() }).catch(console.error);
+      emitToGroup(groupId, 'debt:updated', { debt: updated });
     }
 
     res.json({ success: true, message: 'Debt request rejected', debt: updated });
@@ -542,10 +544,10 @@ export const disputeDebt = async (
     });
 
     const groupId = req.groupId;
+    const counterpartyId = callerId === debt.debtorId.toString() ? debt.creditorId.toString() : debt.debtorId.toString();
     if (groupId) {
-      getIO().to(`group:${groupId}`).emit('debt:updated', { debt: updated });
-    } else {
-      getIO().emit('debt:updated', { debt: updated });
+      notify(groupId, counterpartyId, 'debt:disputed', `Debt of ₹${debt.amount.toLocaleString()} was flagged as disputed.`, { refType: 'debt', refId: debt._id.toString() }).catch(console.error);
+      emitToGroup(groupId, 'debt:updated', { debt: updated });
     }
 
     res.json({ success: true, debt: updated });
@@ -719,17 +721,14 @@ export const recordPayment = async (
       }).catch((e) => console.warn('Idempotency write conflict:', e.message));
     }
 
-    // Emit real-time events
+    // Emit real-time events and notify counterparty
     const groupId = req.groupId;
+    const counterpartyId = callerId === result.currentDebt.debtorId.toString() ? result.currentDebt.creditorId.toString() : result.currentDebt.debtorId.toString();
     if (groupId) {
-      getIO().to(`group:${groupId}`).emit('debt:updated', { debt: updatedDebt });
+      notify(groupId, counterpartyId, 'payment:recorded', `Payment of ₹${amount.toLocaleString()} recorded for debt.`, { refType: 'debt', refId: debtObjectId.toString() }).catch(console.error);
+      emitToGroup(groupId, 'debt:updated', { debt: updatedDebt });
       if (result.newStatus === 'settled') {
-        getIO().to(`group:${groupId}`).emit('debt:settled', { debtId: result.currentDebt._id });
-      }
-    } else {
-      getIO().emit('debt:updated', { debt: updatedDebt });
-      if (result.newStatus === 'settled') {
-        getIO().emit('debt:settled', { debtId: result.currentDebt._id });
+        emitToGroup(groupId, 'debt:settled', { debtId: result.currentDebt._id });
       }
     }
 
@@ -793,9 +792,7 @@ export const updateDebt = async (
 
     const groupId = req.groupId;
     if (groupId) {
-      getIO().to(`group:${groupId}`).emit('debt:updated', { debt: populated });
-    } else {
-      getIO().emit('debt:updated', { debt: populated });
+      emitToGroup(groupId, 'debt:updated', { debt: populated });
     }
     res.json({ success: true, debt: populated });
   } catch (error) {
@@ -851,9 +848,7 @@ export const settleDebt = async (
 
     const groupId = req.groupId;
     if (groupId) {
-      getIO().to(`group:${groupId}`).emit('debt:settled', { debtId: debt.id });
-    } else {
-      getIO().emit('debt:settled', { debtId: debt.id });
+      emitToGroup(groupId, 'debt:settled', { debtId: debt.id });
     }
     res.json({ success: true, message: 'Debt marked as settled.', debtId: debt.id });
   } catch (error) {

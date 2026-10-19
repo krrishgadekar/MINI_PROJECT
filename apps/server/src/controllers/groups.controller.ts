@@ -118,7 +118,7 @@ export const listGroups = async (
 };
 
 /**
- * POST /api/groups/join
+ * POST /api/groups/join or POST /api/groups/:id/join
  * Join a group using an invite code. Role is set to 'member'.
  */
 export const joinGroup = async (
@@ -127,29 +127,27 @@ export const joinGroup = async (
   next: NextFunction,
 ): Promise<void> => {
   try {
-    const parsed = JoinGroupSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({
-        success: false,
-        code: 'VALIDATION',
-        message: 'Validation error',
-        errors: parsed.error.flatten(),
-      });
-      return;
+    const inviteCode = (req.body?.inviteCode as string | undefined)?.trim();
+    const groupIdParam = req.params?.id;
+
+    let group = null;
+
+    if (inviteCode) {
+      group = await Group.findOne({ inviteCode: inviteCode.toUpperCase() });
+    } else if (groupIdParam && mongoose.isValidObjectId(groupIdParam)) {
+      group = await Group.findById(groupIdParam);
     }
 
-    const { inviteCode } = parsed.data;
-    const merchantId = req.merchant!._id as mongoose.Types.ObjectId;
-
-    const group = await Group.findOne({ inviteCode: inviteCode.toUpperCase() });
     if (!group) {
       res.status(404).json({
         success: false,
         code: 'NOT_FOUND',
-        message: 'No group found with this invite code.',
+        message: 'No group found with this invite code or ID.',
       });
       return;
     }
+
+    const merchantId = req.merchant!._id as mongoose.Types.ObjectId;
 
     // Idempotent — if already a member, return existing membership
     const existing = await Membership.findOne({ groupId: group._id, merchantId });
@@ -165,6 +163,98 @@ export const joinGroup = async (
     });
 
     res.json({ success: true, membership });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/groups/:id
+ * Get single group details along with membership list.
+ */
+export const getGroupById = async (
+  req: GroupRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) {
+      throw new AppError(400, 'VALIDATION', 'Invalid group ID format.');
+    }
+
+    const group = await Group.findById(id);
+    if (!group) {
+      throw new AppError(404, 'NOT_FOUND', 'Group not found.');
+    }
+
+    const memberships = await Membership.find({
+      groupId: new mongoose.Types.ObjectId(id),
+    }).populate<{ merchantId: { _id: mongoose.Types.ObjectId; name: string; email: string } }>(
+      'merchantId',
+      'name email',
+    );
+
+    const members = memberships.map((m) => {
+      const merchantObj = m.merchantId as any;
+      const mId = merchantObj?._id?.toString() || m.merchantId.toString();
+      return {
+        _id: m._id.toString(),
+        groupId: id,
+        merchantId: mId,
+        role: m.role,
+        joinedAt: m.joinedAt?.toISOString() || new Date().toISOString(),
+        name: merchantObj?.name,
+        email: merchantObj?.email,
+        merchant: {
+          _id: mId,
+          name: merchantObj?.name,
+          email: merchantObj?.email,
+        },
+      };
+    });
+
+    res.json({
+      success: true,
+      group: {
+        _id: group._id.toString(),
+        name: group.name,
+        type: group.type,
+        ownerId: group.ownerId.toString(),
+        inviteCode: group.inviteCode,
+        createdAt: group.createdAt.toISOString(),
+        role: req.role,
+      },
+      members,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/groups/:id/invite
+ * Returns the invite code for sharing with invitees.
+ */
+export const inviteMember = async (
+  req: GroupRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) {
+      throw new AppError(400, 'VALIDATION', 'Invalid group ID format.');
+    }
+
+    const group = await Group.findById(id);
+    if (!group) {
+      throw new AppError(404, 'NOT_FOUND', 'Group not found.');
+    }
+
+    res.json({ success: true, inviteCode: group.inviteCode });
   } catch (error) {
     next(error);
   }

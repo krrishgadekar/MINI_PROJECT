@@ -154,12 +154,20 @@ export interface InviteResponse {
 export interface ListDebtsParams {
   debtorId?: string;
   creditorId?: string;
-  status?: DebtStatus;
+  status?: DebtStatus | string;
+  scope?: 'mine' | 'all';
+  q?: string;
+  page?: number;
+  limit?: number;
+  sort?: string;
 }
 
 export interface DebtsResponse {
   success: boolean;
   count: number;
+  total?: number;
+  page?: number;
+  totalPages?: number;
   debts: Debt[];
 }
 
@@ -178,6 +186,7 @@ export interface CreateDebtRequest {
 
 export interface UpdateDebtRequest {
   amount: number;
+  expectedVersion?: number;
 }
 
 export interface DeleteDebtResponse {
@@ -194,9 +203,10 @@ export interface DisputeDebtRequest {
 
 export interface RecordPaymentRequest {
   amount: number;
-  expectedVersion: number;
-  kind: PaymentKind;
+  expectedVersion?: number;
+  kind?: PaymentKind;
   note?: string;
+  idempotencyKey?: string;
 }
 
 export interface RecordPaymentResponse {

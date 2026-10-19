@@ -1,69 +1,543 @@
-import { Skeleton, Badge } from '../components/ui';
-import { Receipt } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { api, queryKeys } from '../api';
+import { useAuth } from '../state/AuthProvider';
+import { useGroup } from '../state/GroupProvider';
+import AddDebtModal from '../components/AddDebtModal';
+import { Skeleton, Badge, EmptyState } from '../components/ui';
+import type { Debt } from '../types';
+import {
+  Plus,
+  Search,
+  ArrowUpDown,
+  Clock,
+  AlertTriangle,
+  ArrowRight,
+  TrendingUp,
+  TrendingDown,
+  Calendar,
+} from 'lucide-react';
 
-/**
- * Ledger — Invoicing, Debts & CAS Payments (Owned by Slice A).
- * Placeholder page with skeleton layout.
- */
+type TabStatus = 'all' | 'active' | 'pending' | 'overdue' | 'settled' | 'disputed';
+type SortField = 'createdAt' | 'amount' | 'dueDate';
+type SortOrder = 'asc' | 'desc';
+
 export default function Ledger() {
+  const navigate = useNavigate();
+  const { merchant } = useAuth();
+  const { activeGroup, activeGroupId } = useGroup();
+
+  const [activeTab, setActiveTab] = useState<TabStatus>('active');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [scope, setScope] = useState<'mine' | 'all'>('all');
+  const [sortField, setSortField] = useState<SortField>('createdAt');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+
+  const role = activeGroup?.role ?? 'member';
+  const isAdmin = role === 'admin' || role === 'owner';
+  const effectiveScope = isAdmin ? scope : 'mine';
+
+  const sortParam = `${sortField}:${sortOrder}`;
+
+  // Fetch debts via React Query
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: queryKeys.debts.list({
+      activeGroupId,
+      effectiveScope,
+      activeTab,
+      sortParam,
+      searchQuery,
+      currentPage,
+    }),
+    queryFn: async () => {
+      const params: any = {
+        scope: effectiveScope,
+        page: currentPage,
+        limit: 15,
+        sort: sortParam,
+      };
+
+      if (activeTab !== 'all') {
+        params.status = activeTab;
+      }
+
+      if (searchQuery.trim()) {
+        params.q = searchQuery.trim();
+      }
+
+      return api.debts.list(params);
+    },
+    enabled: Boolean(activeGroupId),
+  });
+
+  const debts: Debt[] = data?.debts || [];
+  const totalPages = data?.totalPages || 1;
+  const totalDebts = data?.total ?? debts.length;
+
+  // Calculate quick summary metrics
+  const myId = merchant?.id || merchant?.name || '';
+  const metrics = useMemo(() => {
+    let receivables = 0;
+    let payables = 0;
+    let pendingCount = 0;
+    let overdueCount = 0;
+    const now = Date.now();
+
+    debts.forEach((d) => {
+      const debtorId = typeof d.debtorId === 'object' ? d.debtorId?._id || d.debtorId?.name : d.debtorId;
+      const creditorId = typeof d.creditorId === 'object' ? d.creditorId?._id || d.creditorId?.name : d.creditorId;
+
+      if (d.status === 'pending') {
+        pendingCount++;
+      }
+
+      if (d.dueDate && new Date(d.dueDate).getTime() < now && d.status === 'active') {
+        overdueCount++;
+      }
+
+      if (d.status === 'active') {
+        if (creditorId === myId) {
+          receivables += d.amount;
+        }
+        if (debtorId === myId) {
+          payables += d.amount;
+        }
+      }
+    });
+
+    return { receivables, payables, pendingCount, overdueCount };
+  }, [debts, myId]);
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortOrder('desc');
+    }
+  };
+
+  const getStatusBadge = (debt: Debt) => {
+    const isPastDue =
+      debt.dueDate && new Date(debt.dueDate).getTime() < Date.now() && debt.status === 'active';
+
+    if (isPastDue) {
+      return (
+        <span className="status-badge" style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+          Overdue
+        </span>
+      );
+    }
+
+    switch (debt.status) {
+      case 'active':
+        return <span className="status-badge status-active">Active</span>;
+      case 'pending':
+        return <span className="status-badge status-pending">Pending Approval</span>;
+      case 'settled':
+        return <span className="status-badge status-settled">Settled</span>;
+      case 'disputed':
+        return (
+          <span className="status-badge" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
+            Disputed
+          </span>
+        );
+      case 'cancelled':
+        return <span className="status-badge status-netted">Cancelled</span>;
+      default:
+        return <span className="status-badge">{debt.status}</span>;
+    }
+  };
+
+  const formatMerchantName = (m: any) => {
+    if (!m) return 'Unknown';
+    if (typeof m === 'string') return m.replace(/_/g, ' ');
+    return m.name || m.email || m._id || 'Unknown';
+  };
+
   return (
     <div className="page-container" style={{ padding: 'var(--content-padding)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+      {/* Top Header Bar */}
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 16,
+          marginBottom: 24,
+        }}
+      >
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
-            <h1 style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 800 }}>Debt Ledger</h1>
-            <Badge variant="primary">Slice A Placeholder</Badge>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
+            <h1 style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 800 }}>Trade Debt Ledger</h1>
+            <Badge variant="primary">{activeGroup?.name || 'Active Group'}</Badge>
+            {isAdmin ? (
+              <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 12, background: 'var(--bg-tertiary)', color: 'var(--text-accent)' }}>
+                Admin View
+              </span>
+            ) : (
+              <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 12, background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>
+                Ego-network
+              </span>
+            )}
           </div>
-          <p style={{ color: 'var(--text-muted)' }}>
-            Peer-to-peer receivables and payables, optimistic version locking, and dispute workflows.
+          <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-size-sm)' }}>
+            Peer-to-peer receivables and payables, optimistic version locking, counterparty approvals, and click-through transaction logs.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <Skeleton width={140} height={38} />
-        </div>
-      </div>
 
-      {/* Filter and stats row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 24 }}>
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="card" style={{ padding: 20 }}>
-            <Skeleton width="45%" height={14} style={{ marginBottom: 10 }} />
-            <Skeleton width="60%" height={26} />
-          </div>
-        ))}
-      </div>
-
-      {/* Table Skeleton */}
-      <div className="card" style={{ padding: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Receipt size={20} color="var(--accent-light)" />
-            <h3 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700 }}>Active Receivables & Payables</h3>
-          </div>
-          <Skeleton width={200} height={32} />
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {[1, 2, 3, 4, 5].map((row) => (
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {isAdmin && (
             <div
-              key={row}
               style={{
-                display: 'grid',
-                gridTemplateColumns: '1.5fr 1.5fr 1fr 1fr 1fr',
-                gap: 16,
-                padding: '12px 0',
-                borderBottom: '1px solid var(--border-secondary)',
+                display: 'flex',
+                background: 'var(--bg-tertiary)',
+                padding: 3,
+                borderRadius: 'var(--border-radius-sm)',
+                border: '1px solid var(--border-secondary)',
               }}
             >
-              <Skeleton height={18} />
-              <Skeleton height={18} />
-              <Skeleton height={18} />
-              <Skeleton height={18} />
-              <Skeleton height={18} />
+              <button
+                type="button"
+                className={`btn btn-sm ${scope === 'all' ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => setScope('all')}
+                style={{ fontSize: 12, padding: '4px 10px' }}
+              >
+                All Group Debts
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm ${scope === 'mine' ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => setScope('mine')}
+                style={{ fontSize: 12, padding: '4px 10px' }}
+              >
+                My Debts Only
+              </button>
             </div>
-          ))}
+          )}
+
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => setIsAddModalOpen(true)}
+            id="add-debt-btn"
+          >
+            <Plus size={16} />
+            Add Debt
+          </button>
         </div>
       </div>
+
+      {/* Summary KPI Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 16, marginBottom: 24 }}>
+        <div className="card" style={{ padding: 18, borderLeft: '3px solid var(--success)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: 'var(--text-muted)', fontSize: 12 }}>
+            <span>My Receivables</span>
+            <TrendingUp size={16} color="var(--success)" />
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: 'var(--success)' }}>
+            ₹{metrics.receivables.toLocaleString('en-IN')}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Owed to you by counterparties</div>
+        </div>
+
+        <div className="card" style={{ padding: 18, borderLeft: '3px solid var(--warning)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: 'var(--text-muted)', fontSize: 12 }}>
+            <span>My Payables</span>
+            <TrendingDown size={16} color="var(--warning)" />
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: 'var(--warning)' }}>
+            ₹{metrics.payables.toLocaleString('en-IN')}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>You owe to creditors</div>
+        </div>
+
+        <div className="card" style={{ padding: 18, borderLeft: '3px solid var(--accent-light)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: 'var(--text-muted)', fontSize: 12 }}>
+            <span>Pending Approvals</span>
+            <Clock size={16} color="var(--accent-light)" />
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 700, marginTop: 6 }}>
+            {metrics.pendingCount}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Awaiting counterparty confirmation</div>
+        </div>
+
+        <div className="card" style={{ padding: 18, borderLeft: '3px solid var(--danger)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: 'var(--text-muted)', fontSize: 12 }}>
+            <span>Overdue Debts</span>
+            <AlertTriangle size={16} color="var(--danger)" />
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: 'var(--danger)' }}>
+            {metrics.overdueCount}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Exceeded maturity schedule</div>
+        </div>
+      </div>
+
+      {/* Main Ledger Card */}
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        {/* Tabs Row */}
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            borderBottom: '1px solid var(--border-secondary)',
+            padding: '12px 20px',
+            gap: 12,
+            background: 'var(--bg-secondary)',
+          }}
+        >
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {(
+              [
+                { id: 'active', label: 'Active' },
+                { id: 'pending', label: 'Pending' },
+                { id: 'overdue', label: 'Overdue' },
+                { id: 'settled', label: 'Settled' },
+                { id: 'disputed', label: 'Disputed' },
+                { id: 'all', label: 'All Debts' },
+              ] as const
+            ).map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  setCurrentPage(1);
+                }}
+                className={`btn btn-sm ${activeTab === tab.id ? 'btn-primary' : 'btn-ghost'}`}
+                style={{ fontSize: 13, borderRadius: 20, padding: '4px 12px' }}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Search Box */}
+          <div style={{ position: 'relative', width: 260 }}>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="Search debtor, creditor, note..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setCurrentPage(1);
+              }}
+              style={{ paddingLeft: 32, height: 34, fontSize: 13 }}
+            />
+            <Search
+              size={14}
+              style={{ position: 'absolute', left: 10, top: 10, color: 'var(--text-muted)' }}
+            />
+          </div>
+        </div>
+
+        {/* Debts Table */}
+        {isLoading ? (
+          <div style={{ padding: 24 }}>
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1.5fr 1fr 1fr', gap: 16, padding: '14px 0', borderBottom: '1px solid var(--border-secondary)' }}>
+                <Skeleton height={20} />
+                <Skeleton height={20} />
+                <Skeleton height={20} />
+                <Skeleton height={20} />
+                <Skeleton height={20} />
+              </div>
+            ))}
+          </div>
+        ) : error ? (
+          <div style={{ padding: 40, textAlign: 'center', color: 'var(--danger)' }}>
+            <AlertTriangle size={32} style={{ marginBottom: 10 }} />
+            <p>Failed to load debts: {(error as any)?.message || 'Unknown error'}</p>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => refetch()} style={{ marginTop: 12 }}>
+              Retry
+            </button>
+          </div>
+        ) : debts.length === 0 ? (
+          <div style={{ padding: 48 }}>
+            <EmptyState
+              title={`No ${activeTab === 'all' ? '' : activeTab} debts found`}
+              description={
+                searchQuery
+                  ? 'No debts match your search query.'
+                  : 'There are currently no debts in this category for this trade group.'
+              }
+              action={
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => setIsAddModalOpen(true)}
+                  style={{ marginTop: 12 }}
+                >
+                  Create Debt Proposal
+                </button>
+              }
+            />
+          </div>
+        ) : (
+          <div className="data-table-wrapper" style={{ margin: 0 }}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th style={{ width: '22%' }}>Debtor (Payer)</th>
+                  <th style={{ width: '22%' }}>Creditor (Payee)</th>
+                  <th
+                    style={{ width: '18%', cursor: 'pointer' }}
+                    onClick={() => handleSort('amount')}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      Remaining / Original
+                      <ArrowUpDown size={13} />
+                    </div>
+                  </th>
+                  <th style={{ width: '15%' }}>Status</th>
+                  <th
+                    style={{ width: '15%', cursor: 'pointer' }}
+                    onClick={() => handleSort('dueDate')}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      Due Date
+                      <ArrowUpDown size={13} />
+                    </div>
+                  </th>
+                  <th style={{ width: '8%', textAlign: 'right' }}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {debts.map((debt) => {
+                  const debtorName = formatMerchantName(debt.debtorId);
+                  const creditorName = formatMerchantName(debt.creditorId);
+                  const isDebtor = debtorName === formatMerchantName(merchant);
+                  const isCreditor = creditorName === formatMerchantName(merchant);
+
+                  return (
+                    <tr
+                      key={debt._id}
+                      onClick={() => navigate(`/ledger/${debt._id}`)}
+                      style={{ cursor: 'pointer' }}
+                      className="ledger-row-hover"
+                    >
+                      <td>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <span style={{ fontWeight: 600 }}>
+                            {debtorName} {isDebtor && <span style={{ fontSize: 11, color: 'var(--text-accent)' }}>(You)</span>}
+                          </span>
+                          {debt.note && (
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 220 }}>
+                              {debt.note}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <span style={{ fontWeight: 600 }}>
+                            {creditorName} {isCreditor && <span style={{ fontSize: 11, color: 'var(--text-accent)' }}>(You)</span>}
+                          </span>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                            v{debt.version}
+                          </span>
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <span style={{ fontWeight: 700, fontSize: 14 }}>
+                            ₹{debt.amount.toLocaleString('en-IN')}
+                          </span>
+                          {debt.originalAmount && debt.originalAmount !== debt.amount && (
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', textDecoration: 'line-through' }}>
+                              ₹{debt.originalAmount.toLocaleString('en-IN')}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td>{getStatusBadge(debt)}</td>
+                      <td>
+                        {debt.dueDate ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                            <Calendar size={13} color="var(--text-muted)" />
+                            <span>{new Date(debt.dueDate).toLocaleDateString()}</span>
+                          </div>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>No date</span>
+                        )}
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/ledger/${debt._id}`);
+                          }}
+                          style={{ padding: 6 }}
+                          title="Open Transaction Detail"
+                        >
+                          <ArrowRight size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Pagination Bar */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '12px 20px',
+            borderTop: '1px solid var(--border-secondary)',
+            background: 'var(--bg-secondary)',
+            fontSize: 13,
+            color: 'var(--text-secondary)',
+          }}
+        >
+          <div>
+            Showing <strong>{debts.length}</strong> of <strong>{totalDebts}</strong> debts
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              disabled={currentPage <= 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            >
+              Previous
+            </button>
+            <span>
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              disabled={currentPage >= totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Add Debt Modal */}
+      <AddDebtModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onSuccess={() => refetch()}
+      />
     </div>
   );
 }

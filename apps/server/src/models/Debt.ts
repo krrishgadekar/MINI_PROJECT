@@ -11,6 +11,8 @@ export interface IDebt extends Document {
   dueDate?: Date;
   note?: string;
   status: DebtStatus;
+  confirmedBy?: Types.ObjectId | null;
+  createdBy?: Types.ObjectId | null;
   version: number;          // explicit numeric version field (optimistic locking)
   createdAt: Date;
   updatedAt: Date;
@@ -30,6 +32,8 @@ const DebtSchema = new Schema<IDebt>(
       enum: ['active', 'settled', 'netted', 'pending', 'disputed', 'cancelled'],
       default: 'active',
     },
+    confirmedBy: { type: Schema.Types.ObjectId, ref: 'Merchant', default: null },
+    createdBy: { type: Schema.Types.ObjectId, ref: 'Merchant', default: null },
     version: { type: Number, default: 0 },   // explicit CAS version (not Mongoose __v)
   },
   {

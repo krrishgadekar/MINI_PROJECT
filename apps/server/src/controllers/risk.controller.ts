@@ -16,6 +16,8 @@ import {
   MerchantCorrelationRecord,
 } from '../services/pythonBridge';
 import { emitToGroup } from '../realtime/socket';
+import { notify } from '../utils/notify';
+import { Membership } from '../models/Group';
 import { AppError } from '../utils/errors';
 
 /**
@@ -323,7 +325,7 @@ export const recomputeGroupRisk = async (
         },
       });
 
-      // 5. Emit real-time flag if HIGH or CRITICAL
+      // 5. Emit real-time flag and notification if HIGH or CRITICAL
       if (riskLabel === 'HIGH' || riskLabel === 'CRITICAL') {
         emitToGroup(groupId, 'risk:flagged', {
           merchantId: mId,
@@ -334,6 +336,14 @@ export const recomputeGroupRisk = async (
           pValue: zResult.p_value,
           computedAt: new Date(),
         });
+
+        Membership.find({ groupId: new Types.ObjectId(groupId), role: { $in: ['admin', 'owner'] } })
+          .select('merchantId')
+          .then((admins) => {
+            const recipients = Array.from(new Set([mId, ...admins.map((a) => a.merchantId.toString())]));
+            notify(groupId, recipients, 'risk:flagged', `Risk Alert: ${m.name} elevated to ${riskLabel} risk (score: ${finalScore}).`, { refType: 'risk', refId: mId }).catch(console.error);
+          })
+          .catch(console.error);
       }
 
       updatedAssessments.push(assessment);

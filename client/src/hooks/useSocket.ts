@@ -23,11 +23,15 @@ export const useSocket = (): void => {
       localStorage.getItem('token') ||
       localStorage.getItem('accessToken') ||
       'mock_token_parth';
+    const groupId = localStorage.getItem('creditflow_active_group') || undefined;
 
-    const serverUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:4000';
+    const serverUrl =
+      import.meta.env.VITE_SERVER_URL ||
+      import.meta.env.VITE_WS_URL ||
+      'http://localhost:4000';
 
     const socket = io(serverUrl, {
-      auth: { token },
+      auth: { token, groupId },
       transports: ['websocket', 'polling'],
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,
@@ -37,7 +41,17 @@ export const useSocket = (): void => {
 
     socket.on('connect', () => {
       console.log('⚡ Realtime Socket connected successfully:', socket.id);
+      if (groupId) {
+        socket.emit('group:join', { groupId });
+      }
     });
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'creditflow_active_group' && e.newValue) {
+        socket.emit('group:join', { groupId: e.newValue });
+      }
+    };
+    window.addEventListener('storage', handleStorage);
 
     // Handle AIMD throttled batches from the server
     socket.on('batch:update', (data: { batchId: number; events: Array<{ event: string; payload: any }> }) => {
@@ -94,6 +108,7 @@ export const useSocket = (): void => {
     };
 
     return () => {
+      window.removeEventListener('storage', handleStorage);
       socket.disconnect();
       socketRef.current = null;
     };

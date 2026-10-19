@@ -6,7 +6,8 @@ import { Merchant } from '../models/Merchant';
 import { Membership } from '../models/Group';
 import { Settlement } from '../models/Settlement';
 import { callSettlement, callCycleDetection, callNetCycle, DebtEdge } from '../services/pythonBridge';
-import { getIO } from '../realtime/socket';
+import { emitToGroup, emitToMerchant } from '../realtime/socket';
+import { notify } from '../utils/notify';
 import mongoose from 'mongoose';
 
 /**
@@ -82,17 +83,27 @@ export const computeSettlement = async (
 
     const settlement = await Settlement.create(settlementData);
 
-    // Emit real-time event scoped to group
-    const io = getIO();
+    // Emit real-time event scoped to group and notify admins + involved merchants
     const eventPayload = {
       batchId,
       transactions: result.transactions,
       transactionCount: result.transaction_count,
     };
     if (groupId) {
-      io.to(`group:${groupId}`).emit('settlement:ready', eventPayload);
-    } else {
-      io.emit('settlement:ready', eventPayload);
+      emitToGroup(groupId, 'settlement:ready', eventPayload);
+
+      Membership.find({ groupId: new mongoose.Types.ObjectId(groupId), role: { $in: ['admin', 'owner'] } })
+        .select('merchantId')
+        .then(async (adminMemberships) => {
+          const involvedNames = new Set((result.transactions || []).flatMap((t: any) => [t.from || t.debtor, t.to || t.creditor]));
+          const involvedMerchants = await Merchant.find({ name: { $in: Array.from(involvedNames) } }).select('_id');
+          const recipientIds = Array.from(new Set([
+            ...adminMemberships.map((m) => m.merchantId.toString()),
+            ...involvedMerchants.map((m) => m._id.toString()),
+          ]));
+          notify(groupId, recipientIds, 'settlement:ready', `Settlement plan ready: ${result.transaction_count || 0} transactions settling ₹${(result.total_amount_settled || 0).toLocaleString()}.`, { refType: 'settlement', refId: settlement.id }).catch(console.error);
+        })
+        .catch(console.error);
     }
 
     res.status(201).json({
@@ -180,9 +191,7 @@ export const netCycleController = async (
               { path: 'creditorId', select: 'name email' },
             ]);
             if (groupId) {
-              getIO().to(`group:${groupId}`).emit('debt:updated', { debt: populated });
-            } else {
-              getIO().emit('debt:updated', { debt: populated });
+              emitToGroup(groupId, 'debt:updated', { debt: populated });
             }
           }
         }
@@ -195,9 +204,14 @@ export const netCycleController = async (
       netFlows: result.net_flows,
     };
     if (groupId) {
-      getIO().to(`group:${groupId}`).emit('cycle:netted', cyclePayload);
-    } else {
-      getIO().emit('cycle:netted', cyclePayload);
+      emitToGroup(groupId, 'cycle:netted', cyclePayload);
+
+      Merchant.find({ name: { $in: result.cycle || [] } })
+        .select('_id')
+        .then((merchants) => {
+          notify(groupId, merchants.map((m) => m._id.toString()), 'cycle:netted', `Debt cycle netted: ₹${(result.amount_netted || 0).toLocaleString()} cleared across ${result.cycle?.length || 0} merchants.`, { refType: 'settlement' }).catch(console.error);
+        })
+        .catch(console.error);
     }
 
     res.json({ success: true, ...result });
@@ -243,9 +257,14 @@ export const confirmSettlement = async (
 
     const confirmPayload = { batchId };
     if (groupId) {
-      getIO().to(`group:${groupId}`).emit('settlement:confirmed', confirmPayload);
-    } else {
-      getIO().emit('settlement:confirmed', confirmPayload);
+      emitToGroup(groupId, 'settlement:confirmed', confirmPayload);
+
+      Membership.find({ groupId: new mongoose.Types.ObjectId(groupId), status: 'active' })
+        .select('merchantId')
+        .then((members) => {
+          notify(groupId, members.map((m) => m.merchantId.toString()), 'settlement:confirmed', `Settlement batch ${batchId} confirmed. All debts marked as settled.`, { refType: 'settlement', refId: settlement.id }).catch(console.error);
+        })
+        .catch(console.error);
     }
 
     res.json({ success: true, message: 'Settlement confirmed. All debts marked as settled.', batchId });

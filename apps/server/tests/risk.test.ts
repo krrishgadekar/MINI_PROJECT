@@ -134,4 +134,37 @@ describe('Risk API', () => {
     expect(res.body.success).toBe(true);
     expect(res.body.portfolio.portfolio_average_risk).toBe(0.25);
   });
+
+  it('BE-07: correctly persists CRITICAL risk category from Python engine', async () => {
+    mockedAxios.post.mockResolvedValueOnce({
+      data: {
+        merchant_id: 'Vendor_D',
+        months_observed: 12,
+        late_payment_events: 10,
+        default_events: 4,
+        lambda_rate: 1.8,
+        risk_score: 0.95,
+        risk_category: 'CRITICAL',
+        model: 'Poisson',
+        cold_start: false,
+      },
+    });
+
+    const res = await request(app)
+      .post(`/api/risk/score/${merchantId}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        history: [
+          { late: true, default: true },
+          { late: true, default: false },
+        ],
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.success).toBe(true);
+    expect(res.body.assessment.risk_category).toBe('CRITICAL');
+
+    const updated = await Merchant.findById(merchantId);
+    expect(updated?.riskProfile.riskCategory).toBe('CRITICAL');
+  });
 });

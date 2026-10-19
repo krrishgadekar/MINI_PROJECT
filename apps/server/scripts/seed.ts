@@ -21,6 +21,7 @@ import { Merchant } from '../src/models/Merchant';
 import { Debt } from '../src/models/Debt';
 import { RiskAssessment } from '../src/models/RiskAssessment';
 import { Settlement } from '../src/models/Settlement';
+import { Group, Membership } from '../src/models/Group';
 
 // Load seed data from repo root
 const seedDataPath = path.resolve(__dirname, '../../../seed_data.json');
@@ -42,6 +43,8 @@ async function seed(): Promise<void> {
     Debt.deleteMany({}),
     RiskAssessment.deleteMany({}),
     Settlement.deleteMany({}),
+    Group.deleteMany({}),
+    Membership.deleteMany({}),
   ]);
   console.log('   Done.');
 
@@ -66,6 +69,27 @@ async function seed(): Promise<void> {
     console.log(`   ${m.name}  →  ${m.email}  (password: ${DEFAULT_PASSWORD})`),
   );
 
+  // ── Create Crawford Market group (Wholesale_A owner, all 8 members) ──────
+  const wholesaleA = merchantDocs.find((m) => m.name === 'Wholesale_A');
+  if (!wholesaleA) throw new Error('Wholesale_A not found in seed merchants');
+
+  const group = await Group.create({
+    name: 'Crawford Market',
+    type: 'market',
+    ownerId: wholesaleA._id,
+    inviteCode: 'CRAWFORD',
+  });
+
+  await Membership.insertMany(
+    merchantDocs.map((m) => ({
+      groupId: group._id,
+      merchantId: m._id,
+      role: m.name === 'Wholesale_A' ? 'owner' : 'member',
+      joinedAt: new Date(),
+    })),
+  );
+  console.log(`✅ Created group "${group.name}" (ID: ${group._id}) with ${merchantDocs.length} members.`);
+
   // Build a name → ObjectId map for wiring up debts
   const nameToId = new Map<string, mongoose.Types.ObjectId>();
   merchantDocs.forEach((m) => nameToId.set(m.name, m._id as mongoose.Types.ObjectId));
@@ -75,6 +99,7 @@ async function seed(): Promise<void> {
     (seedData.debts as Array<{ debtor: string; creditor: string; amount: number }>).map((d) => ({
       debtorId: nameToId.get(d.debtor),
       creditorId: nameToId.get(d.creditor),
+      groupId: group._id,
       amount: d.amount,
       originalAmount: d.amount,
       status: 'active',

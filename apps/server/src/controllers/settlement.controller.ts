@@ -1,20 +1,37 @@
 import { Response, NextFunction } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { AuthRequest } from '../middleware/auth.middleware';
+import { GroupRequest } from '../middleware/group.middleware';
 import { Debt } from '../models/Debt';
 import { Merchant } from '../models/Merchant';
+import { Membership } from '../models/Group';
 import { Settlement } from '../models/Settlement';
 import { callSettlement, callCycleDetection, callNetCycle, DebtEdge } from '../services/pythonBridge';
 import { getIO } from '../realtime/socket';
+import mongoose from 'mongoose';
 
 /**
  * Helper: Build the merchant names list and debt edges from MongoDB for Python engine.
- * The Python engine works with merchant NAMES (strings), not ObjectIds.
+ * When groupId is provided, scopes to group members and group debts only.
  */
-const buildGraphPayload = async (): Promise<{ merchants: string[]; debts: DebtEdge[] }> => {
+const buildGraphPayload = async (
+  groupId?: string,
+): Promise<{ merchants: string[]; debts: DebtEdge[] }> => {
+  let merchantIds: mongoose.Types.ObjectId[] | undefined;
+
+  if (groupId) {
+    const memberships = await Membership.find({
+      groupId: new mongoose.Types.ObjectId(groupId),
+    }).select('merchantId');
+    merchantIds = memberships.map((m) => m.merchantId);
+  }
+
+  const merchantFilter = merchantIds ? { _id: { $in: merchantIds } } : {};
+  const debtFilter: Record<string, unknown> = { status: 'active' };
+  if (groupId) debtFilter.groupId = new mongoose.Types.ObjectId(groupId);
+
   const [allMerchants, activeDebts] = await Promise.all([
-    Merchant.find().select('name'),
-    Debt.find({ status: 'active' })
+    Merchant.find(merchantFilter).select('name'),
+    Debt.find(debtFilter)
       .populate<{ debtorId: { name: string } }>('debtorId', 'name')
       .populate<{ creditorId: { name: string } }>('creditorId', 'name'),
   ]);
@@ -34,12 +51,13 @@ const buildGraphPayload = async (): Promise<{ merchants: string[]; debts: DebtEd
  * Fetches active debts → sends to Python engine → saves Settlement doc → returns result
  */
 export const computeSettlement = async (
-  req: AuthRequest,
+  req: GroupRequest,
   res: Response,
   next: NextFunction,
 ): Promise<void> => {
   try {
-    const { merchants, debts } = await buildGraphPayload();
+    const groupId = req.groupId;
+    const { merchants, debts } = await buildGraphPayload(groupId);
 
     if (debts.length === 0) {
       res.status(400).json({ message: 'No active debts found to settle.' });
@@ -51,7 +69,7 @@ export const computeSettlement = async (
 
     // Persist the settlement batch
     const batchId = uuidv4();
-    const settlement = await Settlement.create({
+    const settlementData: Record<string, unknown> = {
       batchId,
       transactions: result.transactions,
       algorithmUsed: result.algorithm,
@@ -59,14 +77,23 @@ export const computeSettlement = async (
       totalAmountSettled: result.total_amount_settled,
       transactionCount: result.transaction_count,
       initiatedBy: req.merchant!.id,
-    });
+    };
+    if (groupId) settlementData.groupId = new mongoose.Types.ObjectId(groupId);
 
-    // Emit real-time event
-    getIO().emit('settlement:ready', {
+    const settlement = await Settlement.create(settlementData);
+
+    // Emit real-time event scoped to group
+    const io = getIO();
+    const eventPayload = {
       batchId,
       transactions: result.transactions,
       transactionCount: result.transaction_count,
-    });
+    };
+    if (groupId) {
+      io.to(`group:${groupId}`).emit('settlement:ready', eventPayload);
+    } else {
+      io.emit('settlement:ready', eventPayload);
+    }
 
     res.status(201).json({
       success: true,
@@ -84,12 +111,12 @@ export const computeSettlement = async (
  * Detects circular debt chains in the current active debt graph
  */
 export const detectCycles = async (
-  req: AuthRequest,
+  req: GroupRequest,
   res: Response,
   next: NextFunction,
 ): Promise<void> => {
   try {
-    const { merchants, debts } = await buildGraphPayload();
+    const { merchants, debts } = await buildGraphPayload(req.groupId);
     const result = await callCycleDetection(merchants, debts);
     res.json({ success: true, ...result });
   } catch (error) {
@@ -102,7 +129,7 @@ export const detectCycles = async (
  * Nets a circular debt cycle and updates affected debt balances in MongoDB
  */
 export const netCycleController = async (
-  req: AuthRequest,
+  req: GroupRequest,
   res: Response,
   next: NextFunction,
 ): Promise<void> => {
@@ -113,7 +140,8 @@ export const netCycleController = async (
       return;
     }
 
-    const { merchants, debts } = await buildGraphPayload();
+    const groupId = req.groupId;
+    const { merchants, debts } = await buildGraphPayload(groupId);
     const result = await callNetCycle(merchants, debts, cycle);
 
     // Apply netting reductions to MongoDB active debts
@@ -129,11 +157,14 @@ export const netCycleController = async (
         ]);
 
         if (debtor && creditor) {
-          const debt = await Debt.findOne({
+          const debtFilter: Record<string, unknown> = {
             debtorId: debtor._id,
             creditorId: creditor._id,
             status: 'active',
-          });
+          };
+          if (groupId) debtFilter.groupId = new mongoose.Types.ObjectId(groupId);
+
+          const debt = await Debt.findOne(debtFilter);
 
           if (debt) {
             const newAmount = Math.max(0, debt.amount - amountNetted);
@@ -141,23 +172,33 @@ export const netCycleController = async (
             if (newAmount === 0) {
               debt.status = 'netted';
             }
+            debt.version += 1;
             await debt.save();
 
             const populated = await debt.populate([
               { path: 'debtorId', select: 'name email' },
               { path: 'creditorId', select: 'name email' },
             ]);
-            getIO().emit('debt:updated', { debt: populated });
+            if (groupId) {
+              getIO().to(`group:${groupId}`).emit('debt:updated', { debt: populated });
+            } else {
+              getIO().emit('debt:updated', { debt: populated });
+            }
           }
         }
       }
     }
 
-    getIO().emit('cycle:netted', {
+    const cyclePayload = {
       cycle: result.cycle,
       amountNetted: result.amount_netted,
       netFlows: result.net_flows,
-    });
+    };
+    if (groupId) {
+      getIO().to(`group:${groupId}`).emit('cycle:netted', cyclePayload);
+    } else {
+      getIO().emit('cycle:netted', cyclePayload);
+    }
 
     res.json({ success: true, ...result });
   } catch (error) {
@@ -170,16 +211,21 @@ export const netCycleController = async (
  * Confirms a settlement batch and marks all active debts as settled
  */
 export const confirmSettlement = async (
-  req: AuthRequest,
+  req: GroupRequest,
   res: Response,
   next: NextFunction,
 ): Promise<void> => {
   try {
     const { batchId } = req.params;
-    const settlement = await Settlement.findOne({ batchId });
+    const groupId = req.groupId;
+
+    const settlementFilter: Record<string, unknown> = { batchId };
+    if (groupId) settlementFilter.groupId = new mongoose.Types.ObjectId(groupId);
+
+    const settlement = await Settlement.findOne(settlementFilter);
 
     if (!settlement) {
-      res.status(404).json({ message: 'Settlement batch not found.' });
+      res.status(404).json({ success: false, code: 'NOT_FOUND', message: 'Settlement batch not found.' });
       return;
     }
     if (settlement.status === 'confirmed') {
@@ -187,13 +233,20 @@ export const confirmSettlement = async (
       return;
     }
 
-    // Mark all active debts as settled
-    await Debt.updateMany({ status: 'active' }, { $set: { status: 'settled', amount: 0 } });
+    // Mark only group-scoped active debts as settled
+    const debtFilter: Record<string, unknown> = { status: 'active' };
+    if (groupId) debtFilter.groupId = new mongoose.Types.ObjectId(groupId);
+    await Debt.updateMany(debtFilter, { $set: { status: 'settled', amount: 0 }, $inc: { version: 1 } });
 
     settlement.status = 'confirmed';
     await settlement.save();
 
-    getIO().emit('settlement:confirmed', { batchId });
+    const confirmPayload = { batchId };
+    if (groupId) {
+      getIO().to(`group:${groupId}`).emit('settlement:confirmed', confirmPayload);
+    } else {
+      getIO().emit('settlement:confirmed', confirmPayload);
+    }
 
     res.json({ success: true, message: 'Settlement confirmed. All debts marked as settled.', batchId });
   } catch (error) {

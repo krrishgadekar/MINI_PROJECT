@@ -1,6 +1,20 @@
 import { User, Mail, MapPin, Building2, Phone } from "lucide-react";
+import { useAuth } from "../state/AuthProvider";
 
 export default function Profile() {
+  const { merchant } = useAuth();
+
+  const name = merchant?.name || "Parth Goggi";
+  const email = merchant?.email || "parth@spit.ac.in";
+  const phone = merchant?.phone || "+91 98765 43210";
+  const business = merchant?.businessName || "SPIT Mumbai";
+  const initials = name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
   return (
     <div className="animate-fade-in">
       <div className="page-header">
@@ -25,13 +39,13 @@ export default function Profile() {
             margin: "0 auto 16px",
             boxShadow: "0 0 30px rgba(124, 58, 237, 0.3)",
           }}>
-            PG
+            {initials}
           </div>
           <h3 style={{ fontSize: "var(--font-size-lg)", fontWeight: 700, marginBottom: 4 }}>
-            Parth Goggi
+            {name}
           </h3>
           <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)" }}>
-            Software Developer
+            Merchant Account
           </p>
           <div style={{ marginTop: 20 }}>
             <button className="btn btn-secondary" style={{ width: "100%" }}>
@@ -47,10 +61,10 @@ export default function Profile() {
           </h3>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {[
-              { icon: User, label: "Full Name", value: "Parth Goggi" },
-              { icon: Mail, label: "Email", value: "parth@spit.ac.in" },
-              { icon: Phone, label: "Phone", value: "+91 98765 43210" },
-              { icon: Building2, label: "Institution", value: "SPIT Mumbai" },
+              { icon: User, label: "Full Name", value: name },
+              { icon: Mail, label: "Email", value: email },
+              { icon: Phone, label: "Phone", value: phone },
+              { icon: Building2, label: "Business / Institution", value: business },
               { icon: MapPin, label: "Location", value: "Mumbai, India" },
             ].map((item) => (
               <div key={item.label} style={{

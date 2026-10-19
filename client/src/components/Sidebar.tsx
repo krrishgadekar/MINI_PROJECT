@@ -12,9 +12,12 @@ import {
   LogOut,
   Sparkles,
   X,
+  Layers,
 } from 'lucide-react';
 import { useUiStore } from '../store/useUiStore';
 import { useNotifications } from '../hooks/useNotifications';
+import { useAuth } from '../state/AuthProvider';
+import { useGroup } from '../state/GroupProvider';
 
 export const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Overview' },
@@ -34,8 +37,22 @@ export default function Sidebar() {
   const { data: notifData } = useNotifications();
   const unreadCount = notifData?.unreadCount ?? 0;
 
+  const { merchant, groups, logout } = useAuth();
+  const { activeGroupId, activeGroup, setActiveGroup } = useGroup();
+
+  const userName = merchant?.name || 'Parth Goggi';
+  const userInitials = userName
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+  const userRole = activeGroup
+    ? `${activeGroup.name} · ${activeGroup.role}`
+    : (merchant?.email || 'Slice C · Risk Engine');
+
   const handleLogout = () => {
-    localStorage.removeItem('creditflow_token');
+    logout();
     closeSidebar();
     navigate('/login');
   };
@@ -85,6 +102,56 @@ export default function Sidebar() {
           >
             <X size={20} />
           </button>
+        </div>
+
+        {/* Group Switcher Dropdown (FE-03) */}
+        <div
+          style={{
+            padding: '10px 16px',
+            borderBottom: '1px solid var(--border-color, rgba(255, 255, 255, 0.08))',
+            background: 'rgba(255, 255, 255, 0.02)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+            <Layers size={13} style={{ color: 'var(--accent-light, #a78bfa)' }} />
+            <span
+              style={{
+                fontSize: '0.68rem',
+                fontWeight: 600,
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                color: 'var(--text-muted, #94a3b8)',
+              }}
+            >
+              Active Group
+            </span>
+          </div>
+          <select
+            value={activeGroupId ?? ''}
+            onChange={(e) => setActiveGroup(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '6px 10px',
+              borderRadius: '6px',
+              background: 'var(--bg-card, #1e293b)',
+              color: 'var(--text-primary, #f1f5f9)',
+              border: '1px solid var(--border-color, rgba(255, 255, 255, 0.12))',
+              fontSize: '0.8rem',
+              fontWeight: 500,
+              cursor: 'pointer',
+              outline: 'none',
+            }}
+          >
+            {groups.length === 0 ? (
+              <option value="">No Groups Joined</option>
+            ) : (
+              groups.map((g) => (
+                <option key={g._id} value={g._id}>
+                  {g.name} ({g.role})
+                </option>
+              ))
+            )}
+          </select>
         </div>
 
         {/* Navigation Links */}
@@ -147,10 +214,10 @@ export default function Sidebar() {
               navigate('/profile');
             }}
           >
-            <div className="sidebar-avatar">PG</div>
+            <div className="sidebar-avatar">{userInitials}</div>
             <div className="sidebar-user-info">
-              <div className="sidebar-user-name">Parth Goggi</div>
-              <div className="sidebar-user-role">Slice C · Risk Engine</div>
+              <div className="sidebar-user-name">{userName}</div>
+              <div className="sidebar-user-role">{userRole}</div>
               <div className="sidebar-user-view">View Profile</div>
             </div>
           </div>

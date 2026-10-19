@@ -1,5 +1,5 @@
 import React, { Suspense, lazy } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
@@ -12,6 +12,8 @@ import Settings from "./pages/Settings";
 import Documentation from "./pages/Documentation";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import { ToastProvider, ErrorBoundary, Skeleton } from "./components/ui";
+import { AuthProvider, useAuth } from "./state/AuthProvider";
+import { GroupProvider } from "./state/GroupProvider";
 
 // Lazy-loaded placeholder pages for modular slice development (FE-01)
 const Network = lazy(() => import("./pages/Network"));
@@ -42,19 +44,33 @@ function PageFallback() {
   );
 }
 
-function isAuthenticated(): boolean {
-  return !!localStorage.getItem("creditflow_token");
+function GroupProviderWrapper({ children }: { children: React.ReactNode }) {
+  const { groups } = useAuth();
+  return <GroupProvider groups={groups}>{children}</GroupProvider>;
 }
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  if (!isAuthenticated()) {
+  const { isLoading, groups } = useAuth();
+  const location = useLocation();
+
+  if (!localStorage.getItem("creditflow_token")) {
     return <Navigate to="/login" replace />;
   }
+
+  if (isLoading) {
+    return <PageFallback />;
+  }
+
+  // Redirect to /groups when the user has zero groups (FE-03 / Task 8)
+  if (groups.length === 0 && location.pathname !== "/groups") {
+    return <Navigate to="/groups" replace />;
+  }
+
   return <>{children}</>;
 }
 
 function PublicRoute({ children }: { children: React.ReactNode }) {
-  if (isAuthenticated()) {
+  if (localStorage.getItem("creditflow_token")) {
     return <Navigate to="/" replace />;
   }
   return <>{children}</>;
@@ -65,8 +81,10 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
         <ErrorBoundary>
-          <BrowserRouter>
-            <Routes>
+          <AuthProvider>
+            <BrowserRouter>
+              <GroupProviderWrapper>
+                <Routes>
               {/* Public routes */}
               <Route
                 path="/login"
@@ -169,9 +187,11 @@ export default function App() {
               {/* Catch-all redirect */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
-          </BrowserRouter>
-        </ErrorBoundary>
-      </ToastProvider>
-    </QueryClientProvider>
-  );
+          </GroupProviderWrapper>
+        </BrowserRouter>
+      </AuthProvider>
+    </ErrorBoundary>
+  </ToastProvider>
+</QueryClientProvider>
+);
 }

@@ -27,6 +27,9 @@ export default function Login() {
       const res = await authAPI.login(email, password);
       if (res.data?.accessToken) {
         localStorage.setItem("creditflow_token", res.data.accessToken);
+        if (res.data.refreshToken) {
+          localStorage.setItem("creditflow_refresh_token", res.data.refreshToken);
+        }
         if (res.data.merchant) {
           localStorage.setItem("creditflow_user", JSON.stringify(res.data.merchant));
         }

@@ -17,9 +17,10 @@ export * from './contract';
 export * from './keys';
 
 const rawMockDomains: string =
-  (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_MOCK_DOMAINS) || 'all';
+  (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_MOCK_DOMAINS) ||
+  'risk,settlement,graph,notifications';
 
-const isAllMock = !rawMockDomains || rawMockDomains === 'all' || rawMockDomains === '*';
+const isAllMock = rawMockDomains === 'all' || rawMockDomains === '*';
 const isNoneMock = rawMockDomains === 'none';
 
 const mockDomainList = isAllMock || isNoneMock

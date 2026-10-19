@@ -25,7 +25,7 @@ import {
   Trash2,
   ArrowRight,
 } from 'lucide-react';
-import { groupsMock } from '../api/mock/groups.mock';
+import { api } from '../api';
 import type { EnrichedMembership } from '../api/mock/groups.mock';
 import type { Group, Role, GroupType } from '../types';
 import { useGroup } from '../state/GroupProvider';
@@ -65,7 +65,7 @@ export default function Groups() {
   const loadGroups = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await groupsMock.list();
+      const res = await api.groups.list();
       setGroups(res.groups);
       if (res.groups.length > 0) {
         // Select active group or first group
@@ -86,7 +86,7 @@ export default function Groups() {
     async (groupId: string) => {
       try {
         setMembersLoading(true);
-        const res = await groupsMock.getMembers(groupId);
+        const res = await api.groups.getMembers(groupId);
         setMembers(res.members);
       } catch (err: any) {
         toast.error('Failed to load members: ' + err.message);
@@ -121,7 +121,7 @@ export default function Groups() {
   const handleRotateCode = async (group: Group) => {
     try {
       setRotatingId(group._id);
-      const res = await groupsMock.rotateInviteCode(group._id);
+      const res = await api.groups.rotateInviteCode(group._id);
       toast.success(`New invite code generated: ${res.inviteCode}`);
       await loadGroups();
       if (selectedGroup?._id === group._id) {
@@ -144,7 +144,7 @@ export default function Groups() {
 
     try {
       setCreating(true);
-      const res = await groupsMock.create({
+      const res = await api.groups.create({
         name: newGroupName.trim(),
         type: newGroupType,
       });
@@ -171,11 +171,12 @@ export default function Groups() {
 
     try {
       setJoining(true);
-      const res = await groupsMock.join(inviteCodeInput.trim());
+      const res = await api.groups.join(inviteCodeInput.trim(), { inviteCode: inviteCodeInput.trim() });
       toast.success('Successfully joined group!');
       setShowJoinModal(false);
       setInviteCodeInput('');
-      setActiveGroup(res.membership.groupId);
+      const targetGroupId = (res.membership as any).groupId || (res.membership as any)._id;
+      setActiveGroup(targetGroupId);
       reloadAuth();
       await loadGroups();
     } catch (err: any) {
@@ -189,7 +190,7 @@ export default function Groups() {
   const handleUpdateRole = async (member: EnrichedMembership, newRole: Role) => {
     if (!selectedGroup) return;
     try {
-      await groupsMock.updateRole(selectedGroup._id, member.merchantId, newRole);
+      await api.groups.updateRole(selectedGroup._id, member.merchantId, newRole);
       toast.success(`Role for ${member.merchant?.name || member.merchantId} updated to ${newRole}`);
       await loadMembers(selectedGroup._id);
     } catch (err: any) {
@@ -206,7 +207,7 @@ export default function Groups() {
     if (!confirm) return;
 
     try {
-      await groupsMock.removeMember(selectedGroup._id, member.merchantId);
+      await api.groups.removeMember(selectedGroup._id, member.merchantId);
       toast.info(`Removed member from group`);
       await loadMembers(selectedGroup._id);
     } catch (err: any) {

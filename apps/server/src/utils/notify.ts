@@ -1,15 +1,43 @@
 import mongoose, { Types } from 'mongoose';
 import { Notification } from '../models/Notification';
-import { emitToMerchant } from '../realtime/socket';
+import { NotificationPreference } from '../models/NotificationPreference';
+import { deliveryService } from '../services/deliveryService';
 
 export interface NotificationRef {
   refType?: string;
   refId?: string;
 }
 
+const TYPE_MAPPING: Record<string, string> = {
+  'debt:requested': 'debtRequested',
+  'debt:confirmed': 'debtConfirmed',
+  'debt:rejected': 'debtRejected',
+  'debt:disputed': 'debtDisputed',
+  'payment:recorded': 'paymentRecorded',
+  'settlement:ready': 'settlementReady',
+  'settlement:confirmed': 'settlementConfirmed',
+  'cycle:netted': 'cycleNetted',
+  'settlement:cycle_netted': 'cycleNetted',
+  'risk:flagged': 'riskFlagged',
+  'debt:overdue': 'debtOverdue',
+  'debt:due_soon': 'debtDueSoon',
+  'digest:overdue': 'digest',
+};
+
+export const isQuietHoursActive = (startHour: number, endHour: number, now = new Date()): boolean => {
+  const currentHour = now.getHours();
+  if (startHour === endHour) return false;
+  if (startHour > endHour) {
+    return currentHour >= startHour || currentHour < endHour;
+  } else {
+    return currentHour >= startHour && currentHour < endHour;
+  }
+};
+
 /**
  * notify — Utility to persist notification(s) and deliver them in real-time
- * via Socket.io directly to recipient merchant rooms.
+ * via Socket.io directly to recipient merchant rooms, adhering to merchant
+ * notification preferences and quiet hours.
  */
 export const notify = async (
   groupId: string,
@@ -26,7 +54,7 @@ export const notify = async (
 
     try {
       if (mongoose.connection && mongoose.connection.readyState !== 1) {
-        emitToMerchant(merchantId, 'notification:new', {
+        await deliveryService.dispatch({
           id: new Types.ObjectId().toString(),
           groupId,
           merchantId,
@@ -34,11 +62,30 @@ export const notify = async (
           message,
           refType: ref?.refType,
           refId: ref?.refId,
-          readAt: null,
           createdAt: new Date(),
         });
         continue;
       }
+
+      // Check merchant preferences if available
+      let pref: any = null;
+      if (Types.ObjectId.isValid(merchantId)) {
+        pref = await NotificationPreference.findOne({ merchantId: new Types.ObjectId(merchantId) }).lean();
+      }
+
+      // 1. Filter by notification type preferences
+      const prefKey = TYPE_MAPPING[type];
+      if (pref && prefKey && pref.types && pref.types[prefKey] === false) {
+        continue; // Merchant has muted this notification type
+      }
+
+      // 2. Check quiet hours (critical risk alerts bypass quiet hours)
+      const isCritical = type === 'risk:flagged';
+      const isQuiet =
+        !isCritical &&
+        pref?.quietHours?.enabled &&
+        isQuietHoursActive(pref.quietHours.startHour, pref.quietHours.endHour);
+
       const docData: any = {
         merchantId: new Types.ObjectId(merchantId),
         type,
@@ -61,18 +108,24 @@ export const notify = async (
       const notifDoc = await Notification.create(docData);
       created.push(notifDoc);
 
-      // Deliver realtime event to merchant room
-      emitToMerchant(merchantId, 'notification:new', {
-        id: notifDoc.id,
-        groupId,
-        merchantId,
-        type,
-        message,
-        refType: ref?.refType,
-        refId: ref?.refId,
-        readAt: null,
-        createdAt: notifDoc.createdAt,
-      });
+      // 3. Multi-channel dispatch (In-App, Email stub, Webhook) respecting quiet hours
+      await deliveryService.dispatch(
+        {
+          id: notifDoc.id,
+          groupId,
+          merchantId,
+          type,
+          message,
+          refType: ref?.refType,
+          refId: ref?.refId,
+          createdAt: notifDoc.createdAt,
+        },
+        {
+          channels: isQuiet ? { inApp: false, email: false, webhook: false } : pref?.channels,
+          webhookUrl: pref?.webhookUrl,
+          email: pref?.email,
+        }
+      );
     } catch (err) {
       console.error(`Failed to dispatch notification to merchant ${merchantId}:`, err);
     }

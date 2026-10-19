@@ -5,13 +5,16 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import { createApp } from '../src/app';
 import { Merchant } from '../src/models/Merchant';
 import { Debt } from '../src/models/Debt';
+import { Membership } from '../src/models/Group';
 import axios from 'axios';
 import { createMemoryServer } from './setup';
 
 jest.mock('../src/realtime/socket', () => ({
   getIO: () => ({
     emit: jest.fn(),
+    to: jest.fn(() => ({ emit: jest.fn() })),
   }),
+  emitToGroup: jest.fn(),
 }));
 
 jest.mock('axios');
@@ -22,6 +25,7 @@ let mongoServer: MongoMemoryServer;
 let accessToken: string;
 let debtorId: string;
 let creditorId: string;
+let groupId: string;
 
 jest.setTimeout(60000);
 
@@ -43,19 +47,31 @@ beforeAll(async () => {
   debtorId = (debtor._id as mongoose.Types.ObjectId).toString();
   creditorId = (creditor._id as mongoose.Types.ObjectId).toString();
 
-  await Debt.create({
-    debtorId,
-    creditorId,
-    amount: 10000,
-    originalAmount: 10000,
-  });
-
   const res = await request(app).post('/api/auth/register').send({
     name: 'Admin',
     email: 'admin2@test.com',
     password: 'password123',
   });
   accessToken = res.body.accessToken;
+
+  const groupRes = await request(app)
+    .post('/api/groups')
+    .set('Authorization', `Bearer ${accessToken}`)
+    .send({ name: 'Settlement Group', type: 'market' });
+  groupId = groupRes.body.group._id;
+
+  await Membership.create([
+    { groupId: new mongoose.Types.ObjectId(groupId), merchantId: debtor._id, role: 'member' },
+    { groupId: new mongoose.Types.ObjectId(groupId), merchantId: creditor._id, role: 'member' },
+  ]);
+
+  await Debt.create({
+    debtorId,
+    creditorId,
+    groupId: new mongoose.Types.ObjectId(groupId),
+    amount: 10000,
+    originalAmount: 10000,
+  });
 });
 
 afterAll(async () => {
@@ -82,7 +98,8 @@ describe('Settlement API', () => {
 
     const res = await request(app)
       .post('/api/settlement')
-      .set('Authorization', `Bearer ${accessToken}`);
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Group-Id', groupId);
 
     expect(res.status).toBe(201);
     expect(res.body.success).toBe(true);
@@ -100,7 +117,8 @@ describe('Settlement API', () => {
 
     const res = await request(app)
       .post('/api/settlement/cycles')
-      .set('Authorization', `Bearer ${accessToken}`);
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Group-Id', groupId);
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -120,6 +138,7 @@ describe('Settlement API', () => {
     const res = await request(app)
       .post('/api/settlement/net-cycle')
       .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Group-Id', groupId)
       .send({ cycle: ['Debtor_A', 'Creditor_B'] });
 
     expect(res.status).toBe(200);

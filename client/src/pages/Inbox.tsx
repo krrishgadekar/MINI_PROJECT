@@ -42,7 +42,7 @@ export default function Inbox() {
 
   const filteredNotifications = useMemo(() => {
     if (filter === 'unread') {
-      return notifications.filter((n) => !n.readAt);
+      return notifications.filter((n: any) => !n.readAt);
     }
     return notifications;
   }, [notifications, filter]);
@@ -147,7 +147,7 @@ export default function Inbox() {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {pendingDebts.map((debt) => (
+            {pendingDebts.map((debt: any) => (
               <div
                 key={debt._id}
                 style={{
@@ -240,7 +240,7 @@ export default function Inbox() {
           />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {filteredNotifications.map((notif) => {
+            {filteredNotifications.map((notif: any) => {
               const isUnread = !notif.readAt;
               const isRisk = notif.type.startsWith('risk');
               const isDebt = notif.type.startsWith('debt');

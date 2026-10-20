@@ -48,7 +48,40 @@ const mockAuth = {
       id: 'Wholesale_A',
       name: 'Wholesale Vendor A',
       email: 'parth@creditflow.io',
+      phone: '+91 98765 43210',
+      businessName: 'SPIT Mumbai Wholesale',
     },
+  }),
+  updateMe: async (data: any) => ({
+    success: true,
+    merchant: {
+      id: 'Wholesale_A',
+      name: data.name || 'Wholesale Vendor A',
+      email: 'parth@creditflow.io',
+      phone: data.phone || '+91 98765 43210',
+      businessName: data.businessName || 'SPIT Mumbai Wholesale',
+    },
+  }),
+  changePassword: async () => ({
+    success: true,
+    message: 'Password changed successfully.',
+  }),
+  getSessions: async () => ({
+    success: true,
+    count: 1,
+    sessions: [
+      {
+        id: 'mock_session_1',
+        deviceInfo: 'Chrome 128 / Windows 11',
+        ipAddress: '127.0.0.1',
+        lastUsed: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+      },
+    ],
+  }),
+  revokeSession: async () => ({
+    success: true,
+    message: 'Session revoked successfully.',
   }),
 };
 

@@ -11,6 +11,10 @@ import type {
   RegisterRequest,
   AuthResponse,
   MeResponse,
+  ChangePasswordRequest,
+  UpdateMeRequest,
+  SessionsResponse,
+  ImportDebtsResponse,
   GroupsResponse,
   GroupDetailResponse,
   GroupResponse,
@@ -92,6 +96,22 @@ export const realApi: Api = {
       const res = await apiClient.get('/auth/me');
       return res.data;
     },
+    updateMe: async (data: UpdateMeRequest): Promise<{ success: boolean; merchant: any }> => {
+      const res = await apiClient.patch('/auth/me', data);
+      return res.data;
+    },
+    changePassword: async (data: ChangePasswordRequest): Promise<SimpleMessageResponse> => {
+      const res = await apiClient.post('/auth/change-password', data);
+      return res.data;
+    },
+    getSessions: async (): Promise<SessionsResponse> => {
+      const res = await apiClient.get('/auth/sessions');
+      return res.data;
+    },
+    revokeSession: async (id: string): Promise<SimpleMessageResponse> => {
+      const res = await apiClient.delete(`/auth/sessions/${id}`);
+      return res.data;
+    },
   },
 
   groups: {
@@ -116,8 +136,11 @@ export const realApi: Api = {
       const res = await apiClient.post(`/groups/${id}/invite`, data);
       return res.data;
     },
-    getMembers: async (groupId: string): Promise<{ success: boolean; members: any[] }> => {
-      const res = await apiClient.get(`/groups/${groupId}/members`);
+    getMembers: async (
+      groupId: string,
+      params?: { page?: number; limit?: number; role?: string; q?: string }
+    ): Promise<{ success: boolean; members: any[]; total?: number; page?: number; totalPages?: number }> => {
+      const res = await apiClient.get(`/groups/${groupId}/members`, { params });
       return res.data;
     },
     updateRole: async (groupId: string, merchantId: string, role: Role): Promise<{ success: boolean; membership: any }> => {
@@ -172,6 +195,26 @@ export const realApi: Api = {
       data: RecordPaymentRequest
     ): Promise<RecordPaymentResponse> => {
       const res = await apiClient.post(`/debts/${debtId}/payments`, data);
+      return res.data;
+    },
+    exportCsv: async (status?: string, scope?: string): Promise<Blob> => {
+      const res = await apiClient.get('/debts/export.csv', {
+        params: { status, scope },
+        responseType: 'blob',
+      });
+      return res.data;
+    },
+    importCsv: async (
+      data: FormData | { csvText: string },
+      dryRun?: boolean
+    ): Promise<ImportDebtsResponse> => {
+      const config: any = {
+        params: dryRun !== undefined ? { dryRun } : undefined,
+      };
+      if (data instanceof FormData) {
+        config.headers = { 'Content-Type': 'multipart/form-data' };
+      }
+      const res = await apiClient.post('/debts/import', data, config);
       return res.data;
     },
   },

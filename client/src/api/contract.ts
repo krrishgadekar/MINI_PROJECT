@@ -104,7 +104,44 @@ export interface RegisterRequest {
 
 export interface MeResponse {
   success: boolean;
-  merchant: AuthMerchant;
+  merchant: AuthMerchant & { phone?: string; businessName?: string };
+}
+
+export interface ChangePasswordRequest {
+  oldPassword: string;
+  newPassword: string;
+}
+
+export interface UpdateMeRequest {
+  name?: string;
+  phone?: string;
+  businessName?: string;
+}
+
+export interface SessionItem {
+  id: string;
+  deviceInfo: string;
+  ipAddress: string;
+  lastUsed: string;
+  createdAt: string;
+}
+
+export interface SessionsResponse {
+  success: boolean;
+  count: number;
+  sessions: SessionItem[];
+}
+
+export interface ImportDebtsResponse {
+  success: boolean;
+  dryRun: boolean;
+  totalRows?: number;
+  validCount?: number;
+  errorCount?: number;
+  importedCount?: number;
+  errors?: Array<{ row: number; data: Record<string, string>; errors: string[] }>;
+  preview?: any[];
+  debts?: Debt[];
 }
 
 // ── Slice A: Groups & Memberships ───────────────────────────────────────────
@@ -568,6 +605,10 @@ export interface Api {
     login(data: LoginRequest): Promise<AuthResponse>;
     register(data: RegisterRequest): Promise<AuthResponse>;
     me(): Promise<MeResponse>;
+    updateMe(data: UpdateMeRequest): Promise<{ success: boolean; merchant: any }>;
+    changePassword(data: ChangePasswordRequest): Promise<SimpleMessageResponse>;
+    getSessions(): Promise<SessionsResponse>;
+    revokeSession(id: string): Promise<SimpleMessageResponse>;
   };
 
   // Slice A: Groups & Tenancy
@@ -577,7 +618,7 @@ export interface Api {
     create(data: CreateGroupRequest): Promise<GroupResponse>;
     join(idOrCode: string, data?: JoinGroupRequest): Promise<MembershipResponse>;
     invite(id: string, data: InviteGroupRequest): Promise<InviteResponse>;
-    getMembers(groupId: string): Promise<{ success: boolean; members: any[] }>;
+    getMembers(groupId: string, params?: { page?: number; limit?: number; role?: string; q?: string }): Promise<{ success: boolean; members: any[]; total?: number; page?: number; totalPages?: number }>;
     updateRole(groupId: string, merchantId: string, role: Role): Promise<{ success: boolean; membership: any }>;
     removeMember(groupId: string, merchantId: string): Promise<{ success: boolean; message: string }>;
     rotateInviteCode(groupId: string): Promise<InviteResponse>;
@@ -594,6 +635,8 @@ export interface Api {
     reject(id: string): Promise<SimpleMessageResponse>;
     dispute(id: string, data: DisputeDebtRequest): Promise<DebtResponse>;
     recordPayment(debtId: string, data: RecordPaymentRequest): Promise<RecordPaymentResponse>;
+    exportCsv(status?: string, scope?: string): Promise<Blob>;
+    importCsv(data: FormData | { csvText: string }, dryRun?: boolean): Promise<ImportDebtsResponse>;
   };
 
   // Slice A: Audit Log

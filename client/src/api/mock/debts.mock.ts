@@ -316,4 +316,22 @@ export const debtsMock = {
 
     return { success: true, payment, debt };
   },
+
+  exportCsv: async (): Promise<Blob> => {
+    const csv = 'id,debtorName,creditorName,amount,status\n1,Vendor A,Vendor B,1000,active\n';
+    return new Blob([csv], { type: 'text/csv' });
+  },
+
+  importCsv: async (_data: any, dryRun?: boolean) => {
+    return {
+      success: true,
+      dryRun: Boolean(dryRun),
+      totalRows: 2,
+      validCount: 2,
+      errorCount: 0,
+      importedCount: dryRun ? 0 : 2,
+      preview: mockDebts.slice(0, 2),
+      debts: dryRun ? [] : mockDebts.slice(0, 2),
+    };
+  },
 };

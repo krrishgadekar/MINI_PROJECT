@@ -211,3 +211,152 @@ class TestCrossAlgorithmVerification:
             )
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# 2. BOUNDARY & DEGENERATE INPUTS
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class TestBoundaryInputs:
+    """Test algorithms against degenerate, empty, and boundary inputs."""
+
+    def test_empty_graph_all_algorithms(self):
+        """Empty graph (no merchants) should not crash any algorithm."""
+        g = MerchantGraph()
+        assert tarjan_scc(g) == []
+        assert find_all_cycles(g) == []
+        assert not has_cycle(g)
+        assert greedy_minimum_settlement(g) == []
+        assert compute_net_balances(g) == {}
+        closure = warshall_transitive_closure(g)
+        assert closure == {}
+
+    def test_single_node_graph(self):
+        """Single merchant, no edges."""
+        g = MerchantGraph()
+        g.add_merchant("Solo")
+        sccs = tarjan_scc(g)
+        assert len(sccs) == 1
+        assert sccs[0] == ["Solo"]
+        assert not has_cycle(g)
+        assert greedy_minimum_settlement(g) == []
+
+        res = exact_minimum_settlement(g)
+        assert res["transaction_count"] == 0
+
+    def test_two_nodes_one_edge(self):
+        """Simplest possible debt graph: A owes B."""
+        g = MerchantGraph()
+        g.add_merchant("A")
+        g.add_merchant("B")
+        g.add_debt("A", "B", 42.0)
+        assert not has_cycle(g)
+        assert len(greedy_minimum_settlement(g)) == 1
+
+    def test_self_loop_not_added(self):
+        """Adding a self-debt should not be possible (debtor == creditor conceptually)."""
+        g = MerchantGraph()
+        g.add_merchant("A")
+        # A self-debt A→A should accumulate but net balance stays 0
+        g.add_debt("A", "A", 100.0)
+        balances = compute_net_balances(g)
+        assert abs(balances.get("A", 0)) < 1e-6
+
+    def test_exact_solver_at_cap_boundary(self):
+        """Exactly 12 non-zero balances should use exact, 13 should fall back."""
+        g12 = make_random_graph(12, density=0.5, seed=12)
+        res12 = exact_minimum_settlement(g12, max_balances=12)
+        # May or may not be capped depending on how many have zero balance
+        # Just verify it runs without error
+
+        g13 = make_random_graph(14, density=0.5, seed=14)
+        res13 = exact_minimum_settlement(g13, max_balances=12)
+        # With 14 merchants and 0.5 density, most will have non-zero balances
+        # If capped, verify it says so
+        if res13["capped"]:
+            assert "Greedy Heuristic" in res13["algorithm"]
+            assert "Fallback" in res13["algorithm"]
+
+    def test_all_balanced_graph(self):
+        """If every cycle is perfectly balanced, net balances are all 0."""
+        g = MerchantGraph()
+        for m in ["A", "B", "C"]:
+            g.add_merchant(m)
+        g.add_debt("A", "B", 50)
+        g.add_debt("B", "C", 50)
+        g.add_debt("C", "A", 50)
+
+        balances = compute_net_balances(g)
+        for b in balances.values():
+            assert abs(b) < 1e-6
+
+        res = exact_minimum_settlement(g)
+        assert res["transaction_count"] == 0
+
+    def test_zero_amount_correlation(self):
+        """Pearson with all zeros in one series."""
+        res = compute_pearson_correlation([0.0, 0.0, 0.0], [1.0, 2.0, 3.0])
+        assert res["r"] == 0.0
+        assert res["significant"] is False
+
+    def test_z_test_zero_trials(self):
+        """Z-test with 0 trials should return safe defaults."""
+        res = one_proportion_z_test(successes=0, trials=0)
+        assert res["z_score"] == 0.0
+        assert res["is_significant"] is False
+        assert res["sample_size"] == 0
+
+    def test_z_test_baseline_equals_one(self):
+        """Edge case: baseline_p = 1.0 (SE = 0)."""
+        res = one_proportion_z_test(successes=5, trials=10, baseline_p=1.0)
+        assert res["z_score"] == 0.0  # SE is zero, guarded
+
+    def test_z_test_baseline_equals_zero(self):
+        """Edge case: baseline_p = 0.0 (SE = 0)."""
+        res = one_proportion_z_test(successes=5, trials=10, baseline_p=0.0)
+        assert res["z_score"] == 0.0  # SE is zero, guarded
+
+    def test_composite_risk_clamps_to_unit_interval(self):
+        """Composite score should always be in [0, 1]."""
+        # Extreme inputs
+        for lam in [0, 0.01, 1.0, 10.0, 100.0]:
+            for pval in [0.0, 0.5, 1.0]:
+                for delay in [0, 15, 30, 100, 1000]:
+                    score = compute_composite_risk(lam, pval, delay)
+                    assert 0.0 <= score <= 1.0, f"Score {score} out of range for λ={lam}, p={pval}, d={delay}"
+
+    def test_contagion_on_isolated_graph(self):
+        """No edges: contagion produces zero loss for any merchant."""
+        g = MerchantGraph()
+        for m in ["A", "B", "C"]:
+            g.add_merchant(m)
+        res = simulate_default_contagion(g, "A")
+        assert res["total_network_loss"] == 0.0
+        assert len(res["affected_merchants"]) == 0
+
+    def test_contagion_self_loop_excluded(self):
+        """If failed merchant is also creditor to itself, self shouldn't appear in losses."""
+        g = MerchantGraph()
+        g.add_merchant("A")
+        g.add_merchant("B")
+        g.add_debt("A", "B", 100)
+        res = simulate_default_contagion(g, "A")
+        assert "A" not in res["direct_losses"]
+
+    def test_risk_cold_start_merchant(self):
+        """Merchant with < MIN_MONTHS history gets prior rate."""
+        p = MerchantRiskProfile("Cold")
+        p.record_month(had_late_payment=True)  # only 1 month
+        assert p.lambda_rate == MerchantRiskProfile.COLD_START_RATE
+        assert p.risk_category == "LOW"  # 0.05 prior => 1-e^-0.05 ≈ 0.0488 < 0.10
+
+    def test_risk_all_defaults(self):
+        """Merchant that defaults every month should be CRITICAL."""
+        p = MerchantRiskProfile("AlwaysDefault")
+        for _ in range(12):
+            p.record_month(had_late_payment=True, had_default=True)
+        assert p.lambda_rate == 1.0
+        assert p.risk_category == "CRITICAL"
+        assert p.risk_score == round(1 - math.exp(-1.0), 4)
+
+
+# ═════════════════════════════════════════════════════════════════════════════

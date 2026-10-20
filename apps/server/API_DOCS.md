@@ -28,6 +28,46 @@ Updates profile information for the authenticated merchant.
 - **Body**: `{ "name"?: string, "phone"?: string, "businessName"?: string }`
 - **Returns**: `{ success: true, merchant: {...} }`
 
+### `POST /auth/change-password`
+Updates the authenticated merchant's password using bcrypt (12 rounds).
+- **Headers**: `Authorization: Bearer <token>`
+- **Body**: `{ "oldPassword": "currentPassword123", "newPassword": "newSecurePassword456" }`
+- **Validation**: `newPassword` minimum 8 characters.
+- **Returns (200)**: `{ "success": true, "message": "Password changed successfully." }`
+- **Errors**: `400 INVALID_CREDENTIALS` if `oldPassword` is incorrect; `400 VALIDATION` on malformed inputs.
+
+### `POST /auth/refresh`
+Performs RFC 6819 refresh token rotation with family reuse detection.
+- **Body**: `{ "refreshToken": "<jwt_refresh_token>" }`
+- **Mechanism**: Validates the SHA-256 token hash against active sessions. On success, revokes the current session and issues a new `accessToken` and `refreshToken` within the same `familyId`.
+- **Reuse Detection**: If a previously revoked or invalidated token is presented, the entire session family (`familyId`) is immediately revoked to neutralize token theft attacks, returning `401`.
+- **Returns (200)**: `{ "success": true, "accessToken": "...", "refreshToken": "..." }`
+
+### `GET /auth/sessions`
+Lists all active device sessions for the authenticated merchant.
+- **Headers**: `Authorization: Bearer <token>`
+- **Returns (200)**:
+```json
+{
+  "success": true,
+  "count": 1,
+  "sessions": [
+    {
+      "id": "66123abc456def7890123999",
+      "deviceInfo": "Mozilla/5.0 ... Chrome/128",
+      "ipAddress": "127.0.0.1",
+      "lastUsed": "2026-10-20T12:00:00.000Z",
+      "createdAt": "2026-10-20T10:00:00.000Z"
+    }
+  ]
+}
+```
+
+### `DELETE /auth/sessions/:id`
+Revokes an active session, invalidating any future refresh requests from that token family.
+- **Headers**: `Authorization: Bearer <token>`
+- **Returns (200)**: `{ "success": true, "message": "Session revoked successfully." }`
+
 ---
 
 ## 1.1 Tenant Groups (`/api/groups`)
@@ -262,12 +302,23 @@ Join a group using an invite code. Role is set to `member`.
 ```
 
 #### `GET /groups/:id/members`
-List all members in the group with their roles.
+List members in the group with pagination, sorting, and filtering.
 - **Headers**: `Authorization: Bearer <token>`, `X-Group-Id: <id>`
+- **Query Parameters (Optional)**:
+  - `page`: Page number (default: 1)
+  - `limit`: Members per page (default: 20, max: 100)
+  - `role`: Filter by membership role (`owner`, `admin`, or `member`)
+  - `q`: Search string matching merchant name or email (case-insensitive substring)
+  - `sortBy`: Field to sort by (`joinedAt`, `role`, default: `joinedAt`)
+  - `sortOrder`: `asc` or `desc` (default: `desc`)
 - **Returns (200)**:
 ```json
 {
   "success": true,
+  "count": 2,
+  "total": 2,
+  "page": 1,
+  "totalPages": 1,
   "members": [
     {
       "merchantId": "66123abc456def7890123000",
@@ -538,16 +589,53 @@ Records a partial or settlement payment against an active debt using CAS optimis
 - **Errors**:
   - `409 Conflict`: `CONCURRENT_MODIFICATION` if `expectedVersion` does not match the stored version.
 
+#### `GET /debts/export.csv`
+Streams a CSV file of debts within the active tenant group.
+- **Headers**: `Authorization: Bearer <token>`, `X-Group-Id: <id>`
+- **Query Params**:
+  - `status`: Filter by status (`active`, `pending`, `settled`, `disputed`, `cancelled`, or `all`)
+  - `scope`: `mine` (default for members) | `all` (admin/owner only)
+- **Response**: `Content-Type: text/csv`, `Content-Disposition: attachment; filename="debts-<groupId>-<timestamp>.csv"`
+- **Columns**: `id,debtorId,debtorName,debtorEmail,creditorId,creditorName,creditorEmail,amount,remainingAmount,status,dueDate,note,createdAt`
+- **Streaming & Escaping**: Streamed using Mongoose cursor and escaped per RFC 4180.
+
+#### `POST /debts/import`
+Imports debts in bulk from a CSV file (admin/owner only).
+- **Headers**: `Authorization: Bearer <token>`, `X-Group-Id: <id>`
+- **Content-Type**: `multipart/form-data` (field: `csvFile`), `text/csv`, or `application/json` (`{ "csvText": "..." }`)
+- **Query Params**:
+  - `dryRun`: `true` to validate rows and return errors without persisting changes (default: `false`)
+- **Validation**: Per-row validation with Zod. Required columns: `debtorId` (or `debtorEmail`), `creditorId` (or `creditorEmail`), `amount`. Both counterparties must be members of the active group.
+- **Behavior**:
+  - When `dryRun=true`: returns total rows, valid rows, error counts, preview rows, and detailed per-row error diagnostics.
+  - When `dryRun=false`: inserts validated debts in `active` status, audits each creation, and emits realtime socket notifications.
+- **Returns (200 on dry-run, 201 on import)**:
+```json
+{
+  "success": true,
+  "dryRun": false,
+  "totalRows": 25,
+  "validRows": 25,
+  "errorCount": 0,
+  "importedCount": 25,
+  "debts": [ ... ]
+}
+```
+
 ---
 
 ### 7.7 Audit Log Endpoints (`/api/audit`)
 
-#### `GET /audit?entityId=&entityType=&page=&limit=&sort=`
-Retrieves tenant-isolated audit log entries.
+#### `GET /audit?entityId=&entityType=&action=&actorId=&from=&to=&q=&page=&limit=&sort=`
+Retrieves tenant-isolated audit log entries with comprehensive filtering.
 - **Headers**: `Authorization: Bearer <token>`, `X-Group-Id: <id>`
 - **Query Params**:
   - `entityId`: Filter events for a specific resource ID
   - `entityType`: Filter events by type (`Debt`, `Payment`, `Settlement`, `RiskAssessment`)
+  - `action`: Filter by action (e.g. `DEBT_CREATED`, `PAYMENT_RECORDED`, `DEBTS_IMPORTED_CSV`)
+  - `actorId`: Filter by merchant ID who performed the action
+  - `from` / `to`: ISO date strings filtering event creation timestamp
+  - `q`: Search string matching action or metadata content
   - `sort`: Field and direction (default: `createdAt:desc`)
   - `page`: Page number (default: 1)
   - `limit`: Page limit (default: 20, max: 100)
@@ -758,7 +846,42 @@ Marks all notifications in the tenant group for the authenticated merchant as re
 
 ---
 
-### 8.3 Realtime Socket Architecture & AIMD Throttling
+### 8.3 Health & Diagnostic Endpoints (`/health` & `/api/health`)
+
+#### `GET /health` or `GET /api/health`
+Basic liveness probe returning server status and uptime.
+- **Returns (200)**: `{ "status": "ok", "uptime": 124.5 }`
+
+#### `GET /health/deep` or `GET /api/health/deep`
+Deep readiness probe inspecting both the local MongoDB connection state and reachability of the Python computational engine (`http://localhost:8000/health`).
+- **Headers**: No authentication required.
+- **Returns (200 OK / 200 Degraded / 503 Unhealthy)**:
+```json
+{
+  "status": "ok",
+  "timestamp": "2026-10-20T12:00:00.000Z",
+  "uptime": 124.5,
+  "services": {
+    "mongodb": {
+      "status": "connected",
+      "readyState": 1
+    },
+    "pythonEngine": {
+      "status": "reachable",
+      "url": "http://localhost:8000/health",
+      "responseTimeMs": 14
+    }
+  }
+}
+```
+- **Status Determination**:
+  - `status: "ok"` (HTTP 200) if both MongoDB and Python engine are healthy.
+  - `status: "degraded"` (HTTP 200) if MongoDB is connected but Python engine is unreachable (e.g. background engine offline).
+  - `status: "unhealthy"` (HTTP 503) if MongoDB is disconnected or connecting.
+
+---
+
+### 8.4 Realtime Socket Architecture & AIMD Throttling
 
 #### Socket Handshake & Room Subscriptions
 Client connects to Socket.IO with credentials in the handshake authentication block:

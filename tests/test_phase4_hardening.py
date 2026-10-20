@@ -727,3 +727,106 @@ class TestConcurrentExecution:
 
 # ═════════════════════════════════════════════════════════════════════════════
 # 8. STATISTICAL METHOD HARDENING
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class TestStatisticalHardening:
+    """Additional statistical edge cases beyond what Phase 1-3 covered."""
+
+    def test_pearson_with_two_points(self):
+        """n=2 is the minimum for Pearson; should compute without error."""
+        res = compute_pearson_correlation([1.0, 10.0], [2.0, 20.0])
+        assert res["r"] == 1.0
+
+    def test_pearson_negative_values(self):
+        """Negative values in series should work fine."""
+        res = compute_pearson_correlation([-5.0, -3.0, -1.0, 1.0, 3.0], [5.0, 3.0, 1.0, -1.0, -3.0])
+        assert res["r"] == -1.0
+
+    def test_z_test_all_failures(self):
+        """100% failure rate should be highly significant against 5% baseline."""
+        res = one_proportion_z_test(successes=100, trials=100, baseline_p=0.05)
+        assert res["is_significant"] is True
+        assert res["z_score"] > 10.0
+
+    def test_z_test_zero_failures(self):
+        """0% failure rate should not be significant as above-baseline."""
+        res = one_proportion_z_test(successes=0, trials=100, baseline_p=0.05)
+        assert res["is_significant"] is False
+        assert res["z_score"] < 0
+
+    def test_composite_risk_extremes(self):
+        """Verify composite risk at extreme parameter values."""
+        # Perfect merchant: lambda=0, p_value=1.0, delay=0
+        score = compute_composite_risk(lambda_rate=0.0, p_value=1.0, avg_delay_days=0.0)
+        assert score == 0.0
+
+        # Worst merchant: lambda=inf, p_value=0.0, delay=100
+        score = compute_composite_risk(lambda_rate=100.0, p_value=0.0, avg_delay_days=100.0)
+        assert abs(score - 1.0) < 0.01  # ≈ 0.4*1 + 0.4*1 + 0.2*1 = 1.0
+
+    def test_analyze_merchant_correlations_empty(self):
+        """Empty records list."""
+        res = analyze_merchant_correlations([])
+        assert res["sample_size"] == 0
+        assert res["delay_vs_amount"]["r"] == 0.0
+
+    def test_analyze_merchant_correlations_single_record(self):
+        """Single record: too few for correlation."""
+        res = analyze_merchant_correlations([
+            {"merchant_id": "M1", "avg_delay": 5.0, "avg_amount": 100.0, "frequency": 10.0, "late_rate": 0.1},
+        ])
+        assert res["sample_size"] == 1
+        assert res["delay_vs_amount"]["r"] == 0.0
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 9. GRAPH DATA STRUCTURE INTEGRITY
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class TestGraphIntegrity:
+    """Verify MerchantGraph data structure operations."""
+
+    def test_to_dict_roundtrip(self):
+        """Graph serialized to dict and back must be identical."""
+        g = make_random_graph(10, density=0.3, seed=42)
+        d = g.to_dict()
+        g2 = MerchantGraph.from_dict(d)
+        assert sorted(g.merchants) == sorted(g2.merchants)
+        assert len(g.get_all_edges()) == len(g2.get_all_edges())
+        for d1, c1, a1 in g.get_all_edges():
+            assert abs(g2.get_debt(d1, c1) - a1) < 1e-6
+
+    def test_remove_debt(self):
+        g = MerchantGraph()
+        g.add_merchant("A")
+        g.add_merchant("B")
+        g.add_debt("A", "B", 100)
+        assert g.get_debt("A", "B") == 100
+        g.remove_debt("A", "B")
+        assert g.get_debt("A", "B") == 0.0
+
+    def test_set_debt_replaces(self):
+        g = MerchantGraph()
+        g.add_merchant("A")
+        g.add_merchant("B")
+        g.add_debt("A", "B", 100)
+        g.set_debt("A", "B", 42.0)
+        assert g.get_debt("A", "B") == 42.0
+
+    def test_set_debt_zero_removes(self):
+        g = MerchantGraph()
+        g.add_merchant("A")
+        g.add_merchant("B")
+        g.add_debt("A", "B", 100)
+        g.set_debt("A", "B", 0.0)
+        assert g.get_debt("A", "B") == 0.0
+
+    def test_adjacency_list_and_matrix_consistent(self):
+        """Adjacency list and matrix must agree on all edges."""
+        g = make_random_graph(15, density=0.3, seed=77)
+        adj_list = g.get_adjacency_list()
+        for debtor, neighbors in adj_list.items():
+            for creditor, weight in neighbors:
+                assert abs(g.get_debt(debtor, creditor) - weight) < 1e-6

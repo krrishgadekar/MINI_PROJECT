@@ -495,3 +495,95 @@ class TestInputValidation:
 
 # ═════════════════════════════════════════════════════════════════════════════
 # 5. INVARIANT ASSERTIONS
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class TestInvariants:
+    """Mathematical invariants that must hold across all executions."""
+
+    def test_greedy_upper_bound(self):
+        """Greedy settlement needs at most N-1 transactions where N = nonzero balances."""
+        for seed in range(10):
+            g = make_random_graph(8, density=0.3, seed=seed * 19)
+            balances = compute_net_balances(g)
+            nonzero = sum(1 for b in balances.values() if abs(b) > 1e-6)
+            txns = greedy_minimum_settlement(g)
+            assert len(txns) <= max(nonzero - 1, 0), (
+                f"Seed {seed}: {len(txns)} txns > {nonzero - 1} (N-1 upper bound)"
+            )
+
+    def test_exact_optimal_partition_property(self):
+        """
+        For the exact solver: T_min = |S| - M where M = max disjoint zero-sum subsets.
+        If we know M, then exact_count must equal |S| - M.
+        Test with known cases.
+        """
+        # Case: balanced 3-cycle → M=1 (entire set is zero-sum), T = 3-1 = 0... but wait,
+        # all balances are 0, so |S| = 0, T = 0.
+        g = make_complete_cycle(3)
+        res = exact_minimum_settlement(g)
+        assert res["transaction_count"] == 0
+
+        # Case: A→B only, |S|=2, M=1 (A and B form one zero-sum pair), T=1
+        g2 = MerchantGraph()
+        g2.add_merchant("A")
+        g2.add_merchant("B")
+        g2.add_debt("A", "B", 100)
+        res2 = exact_minimum_settlement(g2)
+        assert res2["transaction_count"] == 1
+
+    def test_scc_partition_covers_all_merchants(self):
+        """SCCs should partition all merchants — every merchant appears in exactly one SCC."""
+        for seed in range(10):
+            g = make_random_graph(12, density=0.3, seed=seed * 23)
+            sccs = tarjan_scc(g)
+            all_merchants_in_sccs = []
+            for c in sccs:
+                all_merchants_in_sccs.extend(c)
+            assert sorted(all_merchants_in_sccs) == sorted(g.merchants), (
+                f"Seed {seed}: SCCs don't partition all merchants"
+            )
+            # No duplicates
+            assert len(all_merchants_in_sccs) == len(set(all_merchants_in_sccs))
+
+    def test_warshall_reflexive_and_transitive(self):
+        """Closure must be reflexive (i reaches i) and transitive."""
+        g = make_random_graph(8, density=0.3, seed=42)
+        closure = warshall_transitive_closure(g)
+        merchants = g.merchants
+
+        # Reflexive: every merchant reaches itself
+        for m in merchants:
+            assert closure[m][m] is True, f"Reflexivity: {m} doesn't reach itself"
+
+        # Transitive: if A→B and B→C then A→C
+        for a in merchants:
+            for b in merchants:
+                if closure[a][b]:
+                    for c in merchants:
+                        if closure[b][c]:
+                            assert closure[a][c], (
+                                f"Transitivity: {a}→{b} and {b}→{c} but not {a}→{c}"
+                            )
+
+    def test_contagion_vulnerability_in_unit_interval(self):
+        """Network vulnerability score must be in [0, 1]."""
+        g = make_random_graph(10, density=0.3, seed=33)
+        for m in g.merchants:
+            res = simulate_default_contagion(g, m)
+            assert 0.0 <= res["network_vulnerability_score"] <= 1.0
+
+    def test_risk_category_monotonic(self):
+        """Higher λ must yield higher or equal risk category."""
+        categories = {"LOW": 0, "MEDIUM": 1, "HIGH": 2, "CRITICAL": 3}
+        prev_cat = "LOW"
+        for months_late in range(0, 13):
+            p = MerchantRiskProfile("test")
+            for i in range(12):
+                p.record_month(had_late_payment=(i < months_late))
+            cat = p.risk_category
+            assert categories[cat] >= categories.get(prev_cat, 0) or months_late == 0
+            prev_cat = cat
+
+
+# ═════════════════════════════════════════════════════════════════════════════

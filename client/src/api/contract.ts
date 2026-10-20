@@ -370,6 +370,53 @@ export interface MySettlementResponse {
   netBalance: number;
 }
 
+// ── Slice C: Risk Trend ─────────────────────────────────────────────────────
+
+export interface RiskTrendPoint {
+  month: string;
+  riskScore: number;
+  lateRate: number;
+  eventCount: number;
+  lateCount: number;
+  avgDelayDays: number;
+}
+
+export interface RiskTrendResponse {
+  success: boolean;
+  merchantId: string;
+  months: number;
+  trend: RiskTrendPoint[];
+}
+
+// ── Slice C: Notification Preferences ────────────────────────────────────────
+
+export interface NotificationPreferences {
+  merchantId: string;
+  channels: { inApp: boolean; email: boolean; webhook: boolean };
+  webhookUrl?: string;
+  email?: string;
+  quietHours: { enabled: boolean; startHour: number; endHour: number };
+  types: {
+    debtRequested: boolean;
+    debtConfirmed: boolean;
+    debtRejected: boolean;
+    debtDisputed: boolean;
+    paymentRecorded: boolean;
+    settlementReady: boolean;
+    settlementConfirmed: boolean;
+    cycleNetted: boolean;
+    riskFlagged: boolean;
+    debtOverdue: boolean;
+    debtDueSoon: boolean;
+    digest: boolean;
+  };
+}
+
+export interface NotificationPreferencesResponse {
+  success: boolean;
+  preferences: NotificationPreferences;
+}
+
 // ── Slice C: Risk & Contagion ───────────────────────────────────────────────
 
 export interface ScoreMerchantRiskRequest {
@@ -587,6 +634,7 @@ export interface Api {
     contagion(data: ContagionSimulationRequest): Promise<ContagionSimulationResponse>;
     ztest(data: ZTestCalculateRequest): Promise<ZTestCalculateResponse>;
     correlation(data: CorrelationCalculateRequest): Promise<CorrelationCalculateResponse>;
+    trend(merchantId: string): Promise<RiskTrendResponse>;
   };
 
   // Slice C: Notifications
@@ -594,5 +642,7 @@ export interface Api {
     list(params?: ListNotificationsParams): Promise<NotificationsResponse>;
     markRead(id: string): Promise<NotificationResponse>;
     markAllRead(): Promise<MarkAllReadResponse>;
+    getPreferences(): Promise<NotificationPreferencesResponse>;
+    updatePreferences(data: Partial<Omit<NotificationPreferences, 'merchantId'>>): Promise<NotificationPreferencesResponse>;
   };
 }

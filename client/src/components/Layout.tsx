@@ -1,12 +1,13 @@
 import { Outlet, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
+import CommandPalette from './CommandPalette';
 import { Menu, Bell, Sparkles } from 'lucide-react';
 import { useUiStore } from '../store/useUiStore';
 import { useNotifications } from '../hooks/useNotifications';
 import { useSocket } from '../hooks/useSocket';
 
 /**
- * Layout — App shell with responsive sidebar + topbar + content area.
+ * Layout — App shell with responsive sidebar + topbar + content area + command palette.
  */
 export default function Layout() {
   const { toggleSidebar } = useUiStore();
@@ -19,6 +20,9 @@ export default function Layout() {
 
   return (
     <div className="app-layout">
+      {/* Global Command Palette (Ctrl+K / Cmd+K) */}
+      <CommandPalette />
+
       {/* Mobile Top Header (visible at <= 768px) */}
       <header className="mobile-topbar">
         <button

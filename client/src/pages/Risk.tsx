@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   useGroupRisk,
   useRecomputeRisk,
@@ -34,8 +34,6 @@ import {
   Bar,
   Cell,
   CartesianGrid,
-  LineChart,
-  Line,
   Area,
   AreaChart,
 } from "recharts";
@@ -54,7 +52,6 @@ const SEVERITY_CHIPS: { label: string; value: SeverityFilter; color: string }[] 
 
 export default function Risk() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const { success, error } = useToast();
   const { data: riskData, isLoading, refetch } = useGroupRisk();
   const recomputeMutation = useRecomputeRisk();

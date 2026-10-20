@@ -1,11 +1,15 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useDebts } from '../hooks/useDebts';
 import { useGroupRisk } from '../hooks/useRisk';
+import { useSimulateContagion } from '../hooks/useRisk';
 import GraphVisualizer from '../components/GraphVisualizer';
 import { Badge, Skeleton } from '../components/ui';
 import type { DebtEdge, RiskScoreResponse } from '../types';
-import { Share2, AlertTriangle, RotateCcw, ShieldAlert, Layers } from 'lucide-react';
+import {
+  Share2, AlertTriangle, ShieldAlert, Layers,
+  Zap, X,
+} from 'lucide-react';
 
 export default function Network() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -14,6 +18,11 @@ export default function Network() {
 
   const { data: debtsData, isLoading: debtsLoading } = useDebts({ status: 'active' });
   const { data: riskData, isLoading: riskLoading } = useGroupRisk();
+
+  // Stored contagion simulation results for loss-shading the graph
+  const [contagionLossMap, setContagionLossMap] = useState<Record<string, number>>({});
+  const [totalLoss, setTotalLoss] = useState<number>(0);
+  const contagionMutation = useSimulateContagion();
 
   // Format active debts as DebtEdges
   const { debts, merchants, riskProfiles } = useMemo(() => {
@@ -59,6 +68,23 @@ export default function Network() {
     };
   }, [debtsData, riskData]);
 
+  // When contagionSource is in the URL and we don't have loss data yet, run simulation
+  useMemo(() => {
+    if (contagionSource && merchants.length > 0 && Object.keys(contagionLossMap).length === 0) {
+      contagionMutation.mutate(
+        { merchantId: contagionSource, lossGivenDefault: 1.0, maxRounds: 5 },
+        {
+          onSuccess: (data: any) => {
+            const lossData = data.contagion?.perMerchantLoss || data?.perMerchantLoss || {};
+            setContagionLossMap(lossData);
+            setTotalLoss(data.contagion?.totalLoss || data?.totalLoss || 0);
+          },
+        }
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contagionSource, merchants.length]);
+
   const totalDebtVolume = useMemo(() => {
     return debts.reduce((sum, d) => sum + d.amount, 0);
   }, [debts]);
@@ -67,6 +93,8 @@ export default function Network() {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete('contagion');
     setSearchParams(nextParams);
+    setContagionLossMap({});
+    setTotalLoss(0);
   };
 
   const isLoading = debtsLoading || riskLoading;
@@ -89,17 +117,19 @@ export default function Network() {
           <button
             onClick={() => navigate('/risk')}
             className="btn btn--secondary"
+            aria-label="Go to risk radar page"
             style={{ fontSize: 'var(--font-size-xs)', display: 'inline-flex', alignItems: 'center', gap: 6 }}
           >
-            <ShieldAlert size={14} color="var(--risk-critical)" />
+            <ShieldAlert size={14} color="var(--risk-critical)" aria-hidden="true" />
             Risk Radar
           </button>
           <button
             onClick={() => navigate('/settle')}
             className="btn btn--primary"
+            aria-label="Go to netting and settlement page"
             style={{ fontSize: 'var(--font-size-xs)', display: 'inline-flex', alignItems: 'center', gap: 6 }}
           >
-            <Layers size={14} />
+            <Layers size={14} aria-hidden="true" />
             Netting &amp; Settlement
           </button>
         </div>
@@ -108,39 +138,58 @@ export default function Network() {
       {/* Contagion Simulation Alert Banner */}
       {contagionSource && (
         <div
+          role="alert"
+          aria-live="polite"
           className="card"
           style={{
-            marginBottom: 20,
-            padding: '14px 20px',
+            marginBottom: 20, padding: '14px 20px',
             background: 'rgba(239, 68, 68, 0.12)',
             border: '1px solid var(--risk-critical)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: 12,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            flexWrap: 'wrap', gap: 12,
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <AlertTriangle size={24} color="var(--risk-critical)" />
+            <AlertTriangle size={24} color="var(--risk-critical)" aria-hidden="true" />
             <div>
               <div style={{ fontWeight: 700, color: 'var(--risk-critical)', fontSize: 'var(--font-size-sm)' }}>
                 Systemic Default Contagion Simulation Active
               </div>
               <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
-                Shading obligations initiated by default of <strong>{contagionSource.replace(/_/g, ' ')}</strong> (red). Downstream exposed creditors highlighted in amber.
+                Source: <strong>{contagionSource.replace(/_/g, ' ')}</strong> (red node).
+                Downstream nodes shaded by loss magnitude.
+                {totalLoss > 0 && (
+                  <span style={{ marginLeft: 8, color: 'var(--risk-critical)', fontWeight: 700 }}>
+                    Total network loss: ₹{totalLoss.toLocaleString()}
+                  </span>
+                )}
               </div>
             </div>
           </div>
 
-          <button
-            onClick={clearContagion}
-            className="btn btn--secondary"
-            style={{ fontSize: 'var(--font-size-xs)', display: 'inline-flex', alignItems: 'center', gap: 6 }}
-          >
-            <RotateCcw size={13} />
-            Clear Contagion Shading
-          </button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* Contagion simulation status chip */}
+            {contagionMutation.isPending && (
+              <span style={{
+                padding: '4px 12px', borderRadius: 20, fontSize: 'var(--font-size-xs)',
+                background: 'rgba(251, 191, 36, 0.15)', color: 'var(--risk-medium)',
+                border: '1px solid var(--risk-medium)', display: 'inline-flex', alignItems: 'center', gap: 5,
+              }}>
+                <Zap size={12} aria-hidden="true" /> Simulating...
+              </span>
+            )}
+
+            {/* Clear overlay chip */}
+            <button
+              onClick={clearContagion}
+              className="btn btn--secondary"
+              aria-label="Clear contagion shading and return to normal view"
+              style={{ fontSize: 'var(--font-size-xs)', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              <X size={13} aria-hidden="true" />
+              Clear Overlay
+            </button>
+          </div>
         </div>
       )}
 
@@ -152,7 +201,7 @@ export default function Network() {
           </div>
         ) : merchants.length === 0 ? (
           <div style={{ height: 420, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-            <Share2 size={48} color="var(--text-muted)" style={{ marginBottom: 12 }} />
+            <Share2 size={48} color="var(--text-muted)" style={{ marginBottom: 12 }} aria-hidden="true" />
             <h3 style={{ fontSize: 'var(--font-size-md)', fontWeight: 600 }}>No active debt obligations</h3>
             <p style={{ color: 'var(--text-muted)', fontSize: 'var(--font-size-xs)', marginTop: 4 }}>
               Create or confirm debts in the Ledger to populate the network graph.
@@ -164,6 +213,7 @@ export default function Network() {
             debts={debts}
             riskProfiles={riskProfiles}
             contagionSource={contagionSource}
+            contagionLossMap={contagionLossMap}
             height={520}
           />
         )}

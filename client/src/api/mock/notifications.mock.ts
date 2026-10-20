@@ -10,6 +10,8 @@ import type {
   NotificationResponse,
   MarkAllReadResponse,
   ListNotificationsParams,
+  NotificationPreferences,
+  NotificationPreferencesResponse,
 } from '../contract';
 
 let inMemoryNotifications: Notification[] = [
@@ -101,6 +103,51 @@ export const notificationsMock = {
     };
     inMemoryNotifications.unshift(newNotif);
     return newNotif;
+  },
+
+  getPreferences: async (): Promise<NotificationPreferencesResponse> => {
+    return {
+      success: true,
+      preferences: { ...inMemoryPreferences },
+    };
+  },
+
+  updatePreferences: async (
+    data: Partial<Omit<NotificationPreferences, 'merchantId'>>
+  ): Promise<NotificationPreferencesResponse> => {
+    inMemoryPreferences = {
+      ...inMemoryPreferences,
+      ...data,
+      channels: data.channels ? { ...inMemoryPreferences.channels, ...data.channels } : inMemoryPreferences.channels,
+      quietHours: data.quietHours ? { ...inMemoryPreferences.quietHours, ...data.quietHours } : inMemoryPreferences.quietHours,
+      types: data.types ? { ...inMemoryPreferences.types, ...data.types } : inMemoryPreferences.types,
+    };
+    return {
+      success: true,
+      preferences: { ...inMemoryPreferences },
+    };
+  },
+};
+
+let inMemoryPreferences: NotificationPreferences = {
+  merchantId: 'merchant-mock-1',
+  channels: { inApp: true, email: true, webhook: false },
+  webhookUrl: '',
+  email: 'merchant@creditflow.local',
+  quietHours: { enabled: false, startHour: 22, endHour: 7 },
+  types: {
+    debtRequested: true,
+    debtConfirmed: true,
+    debtRejected: true,
+    debtDisputed: true,
+    paymentRecorded: true,
+    settlementReady: true,
+    settlementConfirmed: true,
+    cycleNetted: true,
+    riskFlagged: true,
+    debtOverdue: true,
+    debtDueSoon: true,
+    digest: true,
   },
 };
 

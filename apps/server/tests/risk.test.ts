@@ -169,4 +169,20 @@ describe('Risk API', () => {
     const updated = await Merchant.findById(merchantId);
     expect(updated?.riskProfile.riskCategory).toBe('CRITICAL');
   });
+
+  it('GET /api/risk/trend/:merchantId - returns 12-month risk trend points', async () => {
+    const res = await request(app)
+      .get(`/api/risk/trend/${merchantId}`)
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.merchantId).toBe(merchantId);
+    expect(res.body.months).toBe(12);
+    expect(res.body.trend).toHaveLength(12);
+    expect(res.body.trend[0]).toHaveProperty('month');
+    expect(res.body.trend[0]).toHaveProperty('riskScore');
+    expect(res.body.trend[0]).toHaveProperty('lateRate');
+  });
 });
+

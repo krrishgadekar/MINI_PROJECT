@@ -360,3 +360,67 @@ class TestBoundaryInputs:
 
 
 # ═════════════════════════════════════════════════════════════════════════════
+# 3. FLOATING POINT PRECISION GUARDS
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class TestFloatingPointPrecision:
+    """Verify algorithms handle IEEE 754 edge cases without accumulating errors."""
+
+    def test_net_balance_sum_always_zero(self):
+        """Sum of all net balances must be zero (conservation of money)."""
+        for seed in range(20):
+            g = make_random_graph(10, density=0.3, seed=seed)
+            balances = compute_net_balances(g)
+            total = sum(balances.values())
+            assert abs(total) < 1e-6, f"Seed {seed}: Balance sum = {total}"
+
+    def test_exact_solver_with_fractional_amounts(self):
+        """Amounts like 33.33 that cause repeating decimals."""
+        g = MerchantGraph()
+        for m in ["A", "B", "C"]:
+            g.add_merchant(m)
+        g.add_debt("A", "B", 33.33)
+        g.add_debt("B", "C", 33.33)
+        g.add_debt("C", "A", 33.33)
+
+        res = exact_minimum_settlement(g)
+        assert res["transaction_count"] == 0
+
+    def test_very_small_amounts(self):
+        """Near-epsilon amounts should be handled without floating point traps."""
+        g = MerchantGraph()
+        g.add_merchant("A")
+        g.add_merchant("B")
+        g.add_debt("A", "B", 0.01)
+        txns = greedy_minimum_settlement(g)
+        assert len(txns) == 1
+        assert txns[0]["amount"] == 0.01
+
+    def test_very_large_amounts(self):
+        """Large amounts (millions) should not cause overflow."""
+        g = MerchantGraph()
+        g.add_merchant("A")
+        g.add_merchant("B")
+        g.add_debt("A", "B", 1_000_000_000.0)
+        txns = greedy_minimum_settlement(g)
+        assert len(txns) == 1
+        assert txns[0]["amount"] == 1_000_000_000.0
+
+    def test_mixed_large_and_small_amounts(self):
+        """A graph mixing tiny and huge amounts."""
+        g = MerchantGraph()
+        for m in ["A", "B", "C"]:
+            g.add_merchant(m)
+        g.add_debt("A", "B", 1_000_000.0)
+        g.add_debt("B", "C", 0.01)
+        g.add_debt("C", "A", 500_000.0)
+
+        balances = compute_net_balances(g)
+        assert abs(sum(balances.values())) < 1e-4
+
+        res = exact_minimum_settlement(g)
+        assert res["transaction_count"] >= 1
+
+
+# ═════════════════════════════════════════════════════════════════════════════

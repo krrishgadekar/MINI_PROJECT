@@ -587,3 +587,143 @@ class TestInvariants:
 
 
 # ═════════════════════════════════════════════════════════════════════════════
+# 6. STRESS TESTS
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class TestStressTests:
+    """Large-scale tests verifying algorithms don't degrade or crash under load."""
+
+    def test_warshall_50_node_dense(self):
+        """Warshall on 50-node, 60% density graph completes without error."""
+        g = make_random_graph(50, density=0.6, seed=50)
+        closure = warshall_transitive_closure(g)
+        assert len(closure) == 50
+
+    def test_scc_100_nodes(self):
+        """Tarjan on 100-node graph completes and covers all merchants."""
+        g = make_random_graph(100, density=0.15, seed=100)
+        sccs = tarjan_scc(g)
+        all_m = []
+        for c in sccs:
+            all_m.extend(c)
+        assert len(all_m) == 100
+
+    def test_cycle_detection_50_nodes(self):
+        """Cycle detection on a dense 50-node graph."""
+        g = make_random_graph(50, density=0.3, seed=50)
+        cycles = find_all_cycles(g)
+        # Just verify it doesn't crash and returns a list
+        assert isinstance(cycles, list)
+
+    def test_net_all_on_dense_cyclic_graph(self):
+        """net_all_cycles on a 20-node, 40% density graph."""
+        g = make_random_graph(20, density=0.4, seed=20)
+        netted, cycles_netted, total_netted = net_all_cycles(g)
+        assert not has_cycle(netted)
+        assert total_netted >= 0
+
+    def test_greedy_settlement_500_merchants(self):
+        """Greedy on 500 merchants with sparse edges."""
+        g = make_random_graph(500, density=0.01, seed=500)
+        txns = greedy_minimum_settlement(g)
+        assert isinstance(txns, list)
+
+    def test_contagion_on_30_node_graph(self):
+        """Contagion simulation on 30 nodes."""
+        g = make_random_graph(30, density=0.2, seed=30)
+        # Pick the first merchant
+        m = g.merchants[0]
+        res = simulate_default_contagion(g, m)
+        assert res["total_network_loss"] >= 0
+
+    def test_risk_engine_1000_merchants(self):
+        """Portfolio risk scoring for 1000 merchants."""
+        engine = RiskEngine()
+        rng = random.Random(1000)
+        for i in range(1000):
+            p = engine.add_merchant(f"M{i}")
+            for _ in range(12):
+                p.record_month(
+                    had_late_payment=rng.random() < 0.2,
+                    had_default=rng.random() < 0.03,
+                )
+        scores = engine.score_all()
+        assert len(scores) == 1000
+        avg = engine.portfolio_average_risk()
+        assert 0 <= avg <= 1
+
+    def test_exact_solver_at_cap_12_nodes(self):
+        """Exact solver at exactly 12 non-zero balanced nodes."""
+        g = MerchantGraph()
+        # Create 12 merchants in a chain so all have non-zero balances
+        for i in range(12):
+            g.add_merchant(f"M{i}")
+        for i in range(11):
+            g.add_debt(f"M{i}", f"M{i+1}", 10.0 * (i + 1))
+        res = exact_minimum_settlement(g)
+        # Should not be capped since there are at most 12 non-zero
+        assert res["transaction_count"] >= 1
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 7. CONCURRENT API STRESS (Thread-Safety for Stateless Algorithms)
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class TestConcurrentExecution:
+    """
+    Verify algorithms are safe to call concurrently (since Python engine is
+    stateless per request in Phase 4 architecture).
+    """
+
+    def test_parallel_exact_settlements(self):
+        """10 parallel exact solver calls on different graphs must all return valid results."""
+        graphs = [make_random_graph(8, density=0.4, seed=i) for i in range(10)]
+
+        def run_exact(g):
+            return exact_minimum_settlement(g)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
+            futures = [pool.submit(run_exact, g) for g in graphs]
+            results = [f.result() for f in concurrent.futures.as_completed(futures)]
+
+        assert len(results) == 10
+        for res in results:
+            assert res["transaction_count"] >= 0
+            assert isinstance(res["transactions"], list)
+
+    def test_parallel_scc_computations(self):
+        """10 parallel SCC calls."""
+        graphs = [make_random_graph(20, density=0.2, seed=i * 7) for i in range(10)]
+
+        def run_scc(g):
+            return tarjan_scc(g)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
+            futures = [pool.submit(run_scc, g) for g in graphs]
+            results = [f.result() for f in concurrent.futures.as_completed(futures)]
+
+        assert len(results) == 10
+        for sccs in results:
+            assert isinstance(sccs, list)
+
+    def test_parallel_contagion_simulations(self):
+        """5 parallel contagion simulations on the same graph, different merchants."""
+        g = make_random_graph(15, density=0.3, seed=42)
+        merchants = g.merchants[:5]
+
+        def run_contagion(m):
+            return simulate_default_contagion(g, m)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
+            futures = [pool.submit(run_contagion, m) for m in merchants]
+            results = [f.result() for f in concurrent.futures.as_completed(futures)]
+
+        assert len(results) == 5
+        for res in results:
+            assert res["total_network_loss"] >= 0
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 8. STATISTICAL METHOD HARDENING

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import {
   Bell, Moon, Sun, Shield, Globe, Clock, Zap, LinkIcon,
-  CheckCircle, Save, ToggleLeft, ToggleRight, Loader,
+  CheckCircle, Save, Loader,
 } from "lucide-react";
 import { useNotificationPreferences, useUpdateNotificationPreferences } from "../hooks/useNotifications";
 import { useToast } from "../components/ui/Toast";

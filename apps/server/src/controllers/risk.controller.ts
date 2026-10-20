@@ -520,3 +520,80 @@ export const getLatestRisk = async (
 };
 
 
+/**
+ * GET /api/risk/trend/:merchantId
+ * Returns the last 12 monthly risk scores computed from PaymentEvent windows.
+ * Each data point: { month: 'YYYY-MM', riskScore: number, lateRate: number, eventCount: number }
+ */
+export const getRiskTrend = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const { merchantId } = req.params;
+
+    if (!Types.ObjectId.isValid(merchantId)) {
+      res.status(400).json({ success: false, message: 'Invalid merchant ID format.' });
+      return;
+    }
+
+    const events = await PaymentEvent.find({ merchantId: new Types.ObjectId(merchantId) })
+      .sort({ dueDate: 1 })
+      .lean();
+
+    const monthBuckets = new Map<string, { lateCount: number; totalCount: number; totalDelay: number }>();
+    for (const ev of events) {
+      const d = new Date(ev.dueDate || ev.createdAt);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      if (!monthBuckets.has(key)) {
+        monthBuckets.set(key, { lateCount: 0, totalCount: 0, totalDelay: 0 });
+      }
+      const bucket = monthBuckets.get(key)!;
+      bucket.totalCount += 1;
+      bucket.totalDelay += ev.delayDays || 0;
+      if (ev.wasLate) bucket.lateCount += 1;
+    }
+
+    const sortedKeys = Array.from(monthBuckets.keys()).sort().slice(-12);
+    const trend = sortedKeys.map((month) => {
+      const b = monthBuckets.get(month)!;
+      const lateRate = b.totalCount > 0 ? b.lateCount / b.totalCount : 0;
+      const avgDelay = b.totalCount > 0 ? b.totalDelay / b.totalCount : 0;
+      const delayFactor = Math.min(avgDelay / 30, 1);
+      const riskScore = parseFloat((lateRate * 0.7 + delayFactor * 0.3).toFixed(4));
+      return {
+        month,
+        riskScore,
+        lateRate: parseFloat(lateRate.toFixed(4)),
+        eventCount: b.totalCount,
+        lateCount: b.lateCount,
+        avgDelayDays: parseFloat(avgDelay.toFixed(1)),
+      };
+    });
+
+    // Pad to 12 entries if fewer data points exist
+    if (trend.length < 12) {
+      const needed = 12 - trend.length;
+      const now = new Date();
+      const refYear = now.getFullYear();
+      const refMonth = now.getMonth(); // 0-indexed
+      const pads: typeof trend = [];
+      for (let i = needed; i >= 1; i--) {
+        const d = new Date(refYear, refMonth - (trend.length > 0 ? needed - i + trend.length : i), 1);
+        const padMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        pads.push({ month: padMonth, riskScore: 0, lateRate: 0, eventCount: 0, lateCount: 0, avgDelayDays: 0 });
+      }
+      trend.unshift(...pads);
+    }
+
+    res.json({
+      success: true,
+      merchantId,
+      months: 12,
+      trend: trend.slice(-12),
+    });
+  } catch (error) {
+    next(error);
+  }
+};

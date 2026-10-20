@@ -8,6 +8,7 @@ import {
   getMerchantRisk,
   recomputeGroupRisk,
   simulateContagion,
+  getRiskTrend,
 } from '../controllers/risk.controller';
 import { protect } from '../middleware/auth.middleware';
 import { requireGroup } from '../middleware/group.middleware';
@@ -21,6 +22,9 @@ riskRouter.get('/group', requireGroup, getGroupRisk);
 riskRouter.get('/merchant/:id', requireGroup, getMerchantRisk);
 riskRouter.post('/recompute', requireGroup, recomputeGroupRisk);
 riskRouter.post('/contagion', requireGroup, simulateContagion);
+
+// Trend endpoint — last 12 monthly risk scores per merchant
+riskRouter.get('/trend/:merchantId', getRiskTrend);
 
 // Legacy Endpoints (no group required)
 riskRouter.post('/score/:merchantId', scoreMerchant);

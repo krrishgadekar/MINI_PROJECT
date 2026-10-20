@@ -23,7 +23,11 @@ const start = async (): Promise<void> => {
   const { startDueDateScheduler } = await import('./services/dueDateJob');
   startDueDateScheduler();
 
-  // 6. Start listening
+  // 6. Start daily notification digest cron (respects CRON_ENABLED env var)
+  const { initDigestCron } = await import('./services/digestJob');
+  initDigestCron();
+
+  // 7. Start listening
   httpServer.listen(PORT, () => {
     console.log(`🚀 CreditFlow backend running at http://localhost:${PORT}`);
     console.log(`🐍 Python engine expected at ${process.env.PYTHON_ENGINE_URL}`);

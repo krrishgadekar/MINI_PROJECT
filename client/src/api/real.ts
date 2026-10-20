@@ -73,6 +73,9 @@ import type {
   NotificationsResponse,
   NotificationResponse,
   MarkAllReadResponse,
+  RiskTrendResponse,
+  NotificationPreferences,
+  NotificationPreferencesResponse,
 } from './contract';
 
 export const realApi: Api = {
@@ -286,6 +289,10 @@ export const realApi: Api = {
       const res = await apiClient.post('/risk/correlation', data);
       return res.data;
     },
+    trend: async (merchantId: string): Promise<RiskTrendResponse> => {
+      const res = await apiClient.get(`/risk/trend/${merchantId}`);
+      return res.data;
+    },
   },
 
   notifications: {
@@ -299,6 +306,16 @@ export const realApi: Api = {
     },
     markAllRead: async (): Promise<MarkAllReadResponse> => {
       const res = await apiClient.post('/notifications/read-all');
+      return res.data;
+    },
+    getPreferences: async (): Promise<NotificationPreferencesResponse> => {
+      const res = await apiClient.get('/notifications/preferences');
+      return res.data;
+    },
+    updatePreferences: async (
+      data: Partial<Omit<NotificationPreferences, 'merchantId'>>
+    ): Promise<NotificationPreferencesResponse> => {
+      const res = await apiClient.patch('/notifications/preferences', data);
       return res.data;
     },
   },

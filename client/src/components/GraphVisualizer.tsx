@@ -2,8 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ForceGraph2D from "react-force-graph-2d";
 import { bfs, buildAdjacencyList } from "../graph/traversal";
 import type { DebtEdge, RiskScoreResponse, GraphNode, GraphLink } from "../types";
-import { MousePointer2, RotateCcw } from "lucide-react";
-
+import { MousePointer2, RotateCcw, AlertTriangle } from "lucide-react";
 
 interface GraphVisualizerProps {
   merchants: string[];
@@ -11,6 +10,8 @@ interface GraphVisualizerProps {
   riskProfiles?: RiskScoreResponse[];
   height?: number;
   contagionSource?: string;
+  /** perMerchantLoss: merchant name → loss amount from contagion simulation */
+  contagionLossMap?: Record<string, number>;
 }
 
 const RISK_COLORS: Record<string, string> = {
@@ -25,6 +26,25 @@ const HIGHLIGHT_NODE_COLOR = "#a78bfa";
 const EDGE_COLOR = "rgba(148, 163, 184, 0.25)";
 const HIGHLIGHT_EDGE_COLOR = "#818cf8";
 
+// Interpolates a hex colour from green→amber→red based on a 0..1 ratio
+function lossColour(ratio: number): string {
+  if (ratio <= 0) return "#22c55e";
+  if (ratio <= 0.5) {
+    // green → amber
+    const t = ratio * 2;
+    const r = Math.round(34 + (245 - 34) * t);
+    const g = Math.round(197 + (158 - 197) * t);
+    const b = Math.round(94 + (11 - 94) * t);
+    return `rgb(${r},${g},${b})`;
+  }
+  // amber → red
+  const t = (ratio - 0.5) * 2;
+  const r = Math.round(245 + (239 - 245) * t);
+  const g = Math.round(158 + (68 - 158) * t);
+  const b = Math.round(11 + (68 - 11) * t);
+  return `rgb(${r},${g},${b})`;
+}
+
 /**
  * GraphVisualizer — Interactive force-directed graph of the merchant debt network.
  *
@@ -32,8 +52,8 @@ const HIGHLIGHT_EDGE_COLOR = "#818cf8";
  *   - Renders merchants as nodes and debts as directed edges.
  *   - On node click: runs BFS (from graph/traversal.ts) to find and
  *     highlight all reachable merchants.
- *   - This is NOT just a library call — the traversal algorithm is
- *     implemented in TypeScript by Parth.
+ *   - contagionLossMap: optional map passed from Network page when
+ *     /network?contagion=ID is active, shading each node by loss amount.
  */
 export default function GraphVisualizer({
   merchants,
@@ -41,6 +61,7 @@ export default function GraphVisualizer({
   riskProfiles = [],
   height = 450,
   contagionSource,
+  contagionLossMap = {},
 }: GraphVisualizerProps) {
   const fgRef = useRef<any>(null);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
@@ -70,6 +91,14 @@ export default function GraphVisualizer({
     [exposureMap]
   );
 
+  // Compute max loss for normalising the contagion colour scale
+  const maxLoss = useMemo(
+    () => Math.max(...Object.values(contagionLossMap), 1),
+    [contagionLossMap]
+  );
+
+  const isContagionActive = contagionSource && Object.keys(contagionLossMap).length > 0;
+
   // Build graph data for react-force-graph
   const graphData = useMemo(() => {
     const nodes: GraphNode[] = merchants.map((m) => ({
@@ -96,17 +125,11 @@ export default function GraphVisualizer({
     [merchants, debts]
   );
 
-  /**
-   * Handle node click — run BFS to find reachable merchants.
-   * This is the KEY academic deliverable for Parth's viva:
-   * client-side graph traversal, not a library call.
-   */
   const handleNodeClick = useCallback(
     (node: any) => {
       const nodeId = node.id as string;
 
       if (selectedNode === nodeId) {
-        // Deselect
         setSelectedNode(null);
         setHighlightedNodes(new Set());
         setHighlightedEdges(new Set());
@@ -114,13 +137,10 @@ export default function GraphVisualizer({
       }
 
       setSelectedNode(nodeId);
-
-      // Run BFS from the clicked node
       const reachable = bfs(adjacencyList, nodeId);
       const newHighlighted = new Set([nodeId, ...reachable]);
       setHighlightedNodes(newHighlighted);
 
-      // Highlight edges on the reachable subgraph
       const edgeKeys = new Set<string>();
       debts.forEach((d) => {
         if (newHighlighted.has(d.debtor) && newHighlighted.has(d.creditor)) {
@@ -135,7 +155,9 @@ export default function GraphVisualizer({
   useEffect(() => {
     if (contagionSource) {
       const match = merchants.find(
-        (m) => m.toLowerCase() === contagionSource.toLowerCase() || m.replace(/_/g, ' ').toLowerCase() === contagionSource.toLowerCase()
+        (m) =>
+          m.toLowerCase() === contagionSource.toLowerCase() ||
+          m.replace(/_/g, " ").toLowerCase() === contagionSource.toLowerCase()
       );
       if (match) {
         setSelectedNode(match);
@@ -163,7 +185,7 @@ export default function GraphVisualizer({
     }
   }, []);
 
-  // Custom node rendering
+  // Custom node rendering — loss-shaded when contagion active
   const nodeCanvasObject = useCallback(
     (node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
       const nodeId = node.id as string;
@@ -176,25 +198,34 @@ export default function GraphVisualizer({
       const radius = isSelected ? baseRadius + 2 : baseRadius;
       const fontSize = Math.max(11 / globalScale, 3);
 
-      // Node circle
       ctx.beginPath();
       ctx.arc(node.x!, node.y!, radius, 0, 2 * Math.PI);
 
       if (isSelected) {
-        // Glow effect for selected node
-        ctx.shadowColor = contagionSource ? '#ef4444' : HIGHLIGHT_NODE_COLOR;
+        ctx.shadowColor = contagionSource ? "#ef4444" : HIGHLIGHT_NODE_COLOR;
         ctx.shadowBlur = 18;
       }
 
-      if (contagionSource && isHighlighted) {
+      if (isContagionActive && isHighlighted) {
         if (nodeId === selectedNode) {
-          ctx.fillStyle = '#ef4444'; // Source failed merchant in high-contrast red
-          ctx.shadowColor = '#ef4444';
-          ctx.shadowBlur = 18;
+          // Failed source → always bright red
+          ctx.fillStyle = "#ef4444";
+          ctx.shadowColor = "#ef4444";
+          ctx.shadowBlur = 20;
         } else {
-          ctx.fillStyle = '#f59e0b'; // Cascade exposed merchant in warning amber
-          ctx.shadowColor = '#f59e0b';
-          ctx.shadowBlur = 12;
+          // Downstream merchants shaded by their loss amount (green→amber→red)
+          const loss = contagionLossMap[nodeId] || contagionLossMap[label] || 0;
+          const ratio = maxLoss > 0 ? loss / maxLoss : 0;
+          ctx.fillStyle = lossColour(ratio);
+          ctx.shadowColor = lossColour(ratio);
+          ctx.shadowBlur = 10;
+        }
+      } else if (contagionSource && isHighlighted) {
+        // Contagion active but no loss data — fallback amber
+        if (nodeId === selectedNode) {
+          ctx.fillStyle = "#ef4444";
+        } else {
+          ctx.fillStyle = "#f59e0b";
         }
       } else {
         ctx.fillStyle = !isHighlighted
@@ -207,7 +238,6 @@ export default function GraphVisualizer({
       ctx.globalAlpha = isHighlighted ? 1 : 0.2;
       ctx.fill();
 
-      // Border
       if (isSelected) {
         ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = 2 / globalScale;
@@ -217,28 +247,35 @@ export default function GraphVisualizer({
       ctx.shadowBlur = 0;
       ctx.globalAlpha = isHighlighted ? 1 : 0.3;
 
-      // Label
       ctx.font = `${isSelected ? "600" : "500"} ${fontSize}px Inter, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
       ctx.fillStyle = isHighlighted ? "#f1f5f9" : "#64748b";
       ctx.fillText(label, node.x!, node.y! + radius + 3);
 
+      // Show loss label if contagion active
+      if (isContagionActive && isHighlighted && nodeId !== selectedNode) {
+        const loss = contagionLossMap[nodeId] || contagionLossMap[label] || 0;
+        if (loss > 0) {
+          const lossLabel = `₹${(loss / 1000).toFixed(0)}k`;
+          ctx.font = `600 ${Math.max(9 / globalScale, 2.5)}px Inter, sans-serif`;
+          ctx.fillStyle = "#fbbf24";
+          ctx.fillText(lossLabel, node.x!, node.y! + radius + fontSize + 5);
+        }
+      }
+
       ctx.globalAlpha = 1;
     },
-    [highlightedNodes, selectedNode, riskMap, exposureMap, maxExposure]
+    [highlightedNodes, selectedNode, riskMap, exposureMap, maxExposure, contagionLossMap, maxLoss, isContagionActive, contagionSource]
   );
 
   // Custom link rendering
   const linkCanvasObject = useCallback(
     (link: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
-      const sourceId =
-        typeof link.source === "object" ? link.source.id : link.source;
-      const targetId =
-        typeof link.target === "object" ? link.target.id : link.target;
+      const sourceId = typeof link.source === "object" ? link.source.id : link.source;
+      const targetId = typeof link.target === "object" ? link.target.id : link.target;
       const edgeKey = `${sourceId}→${targetId}`;
-      const isHighlighted =
-        highlightedEdges.size === 0 || highlightedEdges.has(edgeKey);
+      const isHighlighted = highlightedEdges.size === 0 || highlightedEdges.has(edgeKey);
 
       const source = typeof link.source === "object" ? link.source : null;
       const target = typeof link.target === "object" ? link.target : null;
@@ -251,15 +288,17 @@ export default function GraphVisualizer({
 
       ctx.globalAlpha = isHighlighted ? 0.7 : 0.1;
 
-      // Draw line
       ctx.beginPath();
       ctx.moveTo(source.x, source.y);
       ctx.lineTo(target.x, target.y);
-      ctx.strokeStyle = isHighlighted ? HIGHLIGHT_EDGE_COLOR : EDGE_COLOR;
+      // Red tint for contagion edges
+      const edgeColour = contagionSource && isHighlighted && highlightedEdges.size > 0
+        ? "rgba(239, 68, 68, 0.6)"
+        : isHighlighted ? HIGHLIGHT_EDGE_COLOR : EDGE_COLOR;
+      ctx.strokeStyle = edgeColour;
       ctx.lineWidth = isHighlighted ? 1.5 / globalScale : 0.5 / globalScale;
       ctx.stroke();
 
-      // Draw arrowhead
       const arrowLen = 6 / globalScale;
       const angle = Math.atan2(dy, dx);
       const arrowX = target.x - (dx / len) * 10;
@@ -267,24 +306,17 @@ export default function GraphVisualizer({
 
       ctx.beginPath();
       ctx.moveTo(arrowX, arrowY);
-      ctx.lineTo(
-        arrowX - arrowLen * Math.cos(angle - Math.PI / 6),
-        arrowY - arrowLen * Math.sin(angle - Math.PI / 6)
-      );
-      ctx.lineTo(
-        arrowX - arrowLen * Math.cos(angle + Math.PI / 6),
-        arrowY - arrowLen * Math.sin(angle + Math.PI / 6)
-      );
+      ctx.lineTo(arrowX - arrowLen * Math.cos(angle - Math.PI / 6), arrowY - arrowLen * Math.sin(angle - Math.PI / 6));
+      ctx.lineTo(arrowX - arrowLen * Math.cos(angle + Math.PI / 6), arrowY - arrowLen * Math.sin(angle + Math.PI / 6));
       ctx.closePath();
-      ctx.fillStyle = isHighlighted ? HIGHLIGHT_EDGE_COLOR : EDGE_COLOR;
+      ctx.fillStyle = edgeColour;
       ctx.fill();
 
-      // Amount label
       if (isHighlighted && highlightedEdges.size > 0) {
         const midX = (source.x + target.x) / 2;
         const midY = (source.y + target.y) / 2;
-        const fontSize = Math.max(9 / globalScale, 2.5);
-        ctx.font = `500 ${fontSize}px Inter, sans-serif`;
+        const fs = Math.max(9 / globalScale, 2.5);
+        ctx.font = `500 ${fs}px Inter, sans-serif`;
         ctx.fillStyle = "#a5b4fc";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
@@ -293,17 +325,58 @@ export default function GraphVisualizer({
 
       ctx.globalAlpha = 1;
     },
-    [highlightedEdges]
+    [highlightedEdges, contagionSource]
   );
 
   return (
-    <div className="graph-container" style={{ height }}>
+    <div className="graph-container" style={{ height, position: "relative" }}>
       {/* Controls */}
       <div className="graph-controls">
-        <button className="btn btn-secondary btn-sm" onClick={handleReset}>
-          <RotateCcw size={14} /> Reset
+        <button className="btn btn-secondary btn-sm" onClick={handleReset} aria-label="Reset graph zoom and selection">
+          <RotateCcw size={14} aria-hidden="true" /> Reset
         </button>
       </div>
+
+      {/* Contagion Loss Legend */}
+      {isContagionActive && (
+        <div
+          role="img"
+          aria-label="Contagion loss legend: green = no loss, red = maximum loss"
+          style={{
+            position: "absolute",
+            bottom: 16,
+            left: 16,
+            zIndex: 10,
+            background: "rgba(10, 17, 40, 0.88)",
+            border: "1px solid rgba(239, 68, 68, 0.3)",
+            borderRadius: 10,
+            padding: "10px 14px",
+            fontSize: "0.7rem",
+            backdropFilter: "blur(8px)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, fontWeight: 700, color: "#f87171" }}>
+            <AlertTriangle size={12} aria-hidden="true" /> Contagion Loss Scale
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+            <div style={{ width: 12, height: 12, borderRadius: "50%", background: "#ef4444", flexShrink: 0 }} />
+            <span style={{ color: "#f1f5f9" }}>Source (failed merchant)</span>
+          </div>
+          {/* Gradient bar */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+            <span style={{ color: "#94a3b8", fontSize: "0.65rem" }}>None</span>
+            <div style={{
+              width: 80, height: 8, borderRadius: 4,
+              background: "linear-gradient(to right, #22c55e, #f59e0b, #ef4444)",
+              flexShrink: 0,
+            }} />
+            <span style={{ color: "#94a3b8", fontSize: "0.65rem" }}>Max ₹{(maxLoss / 1000).toFixed(0)}k</span>
+          </div>
+          <div style={{ color: "#64748b", fontSize: "0.6rem", marginTop: 6 }}>
+            Loss shown on each node in ₹k
+          </div>
+        </div>
+      )}
 
       {/* Force-directed graph */}
       <ForceGraph2D
@@ -323,9 +396,9 @@ export default function GraphVisualizer({
 
       {/* Info Panel */}
       {selectedNode && (
-        <div className="graph-info-panel animate-fade-in">
+        <div className="graph-info-panel animate-fade-in" role="status" aria-live="polite">
           <h4>
-            <MousePointer2 size={14} style={{ marginRight: 6, verticalAlign: "middle" }} />
+            <MousePointer2 size={14} style={{ marginRight: 6, verticalAlign: "middle" }} aria-hidden="true" />
             {selectedNode.replace("_", " ")}
           </h4>
           <p>
@@ -333,13 +406,17 @@ export default function GraphVisualizer({
             {highlightedNodes.size - 1 !== 1 ? "s" : ""}
           </p>
           <p>
-            <strong>Exposure:</strong> ₹
-            {(exposureMap[selectedNode] || 0).toLocaleString("en-IN")}
+            <strong>Exposure:</strong> ₹{(exposureMap[selectedNode] || 0).toLocaleString("en-IN")}
           </p>
           {riskMap[selectedNode] && (
             <p>
               <strong>Risk:</strong> {riskMap[selectedNode].risk_category} (
               {(riskMap[selectedNode].risk_score * 100).toFixed(1)}%)
+            </p>
+          )}
+          {isContagionActive && contagionLossMap[selectedNode] !== undefined && (
+            <p style={{ color: "#f87171" }}>
+              <strong>Contagion Loss:</strong> ₹{contagionLossMap[selectedNode].toLocaleString("en-IN")}
             </p>
           )}
           <p style={{ marginTop: 6, fontStyle: "italic", opacity: 0.7 }}>

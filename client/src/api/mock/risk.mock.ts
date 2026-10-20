@@ -26,6 +26,8 @@ import type {
   ScoreMerchantRiskRequest,
   PortfolioRiskRequest,
   MerchantRiskResponse,
+  RiskTrendResponse,
+  RiskTrendPoint,
 } from '../contract';
 
 // In-memory store initialized from seed data
@@ -279,6 +281,33 @@ export const riskMock = {
         },
         sampleSize: 8,
       },
+    };
+  },
+
+  trend: async (merchantId: string): Promise<RiskTrendResponse> => {
+    const months = [
+      '2025-11', '2025-12', '2026-01', '2026-02',
+      '2026-03', '2026-04', '2026-05', '2026-06',
+      '2026-07', '2026-08', '2026-09', '2026-10',
+    ];
+    const baseScore = inMemoryAssessments.find((a) => a.merchantId === merchantId)?.riskScore ?? 0.25;
+    const trend: RiskTrendPoint[] = months.map((month, idx) => {
+      const factor = Math.sin(idx) * 0.08;
+      const score = Math.max(0.02, Math.min(0.95, baseScore + factor));
+      return {
+        month,
+        riskScore: parseFloat(score.toFixed(3)),
+        lateRate: parseFloat((score * 0.4).toFixed(3)),
+        eventCount: 10 + (idx % 5),
+        lateCount: Math.round(score * 4),
+        avgDelayDays: Math.round(score * 12),
+      };
+    });
+    return {
+      success: true,
+      merchantId,
+      months: 12,
+      trend,
     };
   },
 

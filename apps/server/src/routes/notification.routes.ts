@@ -4,6 +4,8 @@ import {
   getNotifications,
   markNotificationRead,
   markAllNotificationsRead,
+  getPreferences,
+  updatePreferences,
 } from '../controllers/notification.controller';
 
 const router = Router();
@@ -11,6 +13,8 @@ const router = Router();
 router.use(requireAuth);
 
 router.get('/', getNotifications);
+router.get('/preferences', getPreferences);
+router.patch('/preferences', updatePreferences);
 router.patch('/:id/read', markNotificationRead);
 router.post('/read-all', markAllNotificationsRead);
 

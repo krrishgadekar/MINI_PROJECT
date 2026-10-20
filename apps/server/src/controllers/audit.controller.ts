@@ -45,6 +45,28 @@ export const getAuditLogs = async (
       filter.entityType = req.query.entityType;
     }
 
+    if (req.query.action) {
+      filter.action = req.query.action;
+    }
+
+    if (req.query.actorId && role !== 'member') {
+      if (mongoose.isValidObjectId(req.query.actorId as string)) {
+        filter.actorId = new mongoose.Types.ObjectId(req.query.actorId as string);
+      }
+    }
+
+    if (req.query.startDate || req.query.endDate) {
+      const dateFilter: Record<string, Date> = {};
+      if (req.query.startDate) dateFilter.$gte = new Date(req.query.startDate as string);
+      if (req.query.endDate) dateFilter.$lte = new Date(req.query.endDate as string);
+      filter.createdAt = dateFilter;
+    }
+
+    if (req.query.q) {
+      const q = (req.query.q as string).trim();
+      filter.action = new RegExp(q, 'i');
+    }
+
     // Role-based visibility check
     if (role === 'member') {
       // Find all debt IDs where caller is debtor or creditor in this group

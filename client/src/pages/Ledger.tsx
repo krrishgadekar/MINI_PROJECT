@@ -5,7 +5,9 @@ import { api, queryKeys } from '../api';
 import { useAuth } from '../state/AuthProvider';
 import { useGroup } from '../state/GroupProvider';
 import AddDebtModal from '../components/AddDebtModal';
+import ImportDebtsModal from '../components/ImportDebtsModal';
 import { Skeleton, Badge, EmptyState } from '../components/ui';
+import { useToast } from '../components/ui/Toast';
 import type { Debt } from '../types';
 import {
   Plus,
@@ -17,6 +19,9 @@ import {
   TrendingUp,
   TrendingDown,
   Calendar,
+  Download,
+  Upload,
+  Loader,
 } from 'lucide-react';
 
 type TabStatus = 'all' | 'active' | 'pending' | 'overdue' | 'settled' | 'disputed';
@@ -27,6 +32,7 @@ export default function Ledger() {
   const navigate = useNavigate();
   const { merchant } = useAuth();
   const { activeGroup, activeGroupId } = useGroup();
+  const { success: showToastSuccess, error: showToastError } = useToast();
 
   const [activeTab, setActiveTab] = useState<TabStatus>('active');
   const [searchQuery, setSearchQuery] = useState('');
@@ -35,6 +41,8 @@ export default function Ledger() {
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [currentPage, setCurrentPage] = useState(1);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const role = activeGroup?.role ?? 'member';
   const isAdmin = role === 'admin' || role === 'owner';
@@ -152,6 +160,29 @@ export default function Ledger() {
     }
   };
 
+  const handleExportCsv = async () => {
+    try {
+      setIsExporting(true);
+      const blob = await api.debts.exportCsv(
+        activeTab !== 'all' ? activeTab : undefined,
+        effectiveScope
+      );
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `debts_${activeGroup?.name || 'export'}_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      showToastSuccess('CSV export downloaded successfully!');
+    } catch {
+      showToastError('Failed to export debts CSV.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const formatMerchantName = (m: any) => {
     if (!m) return 'Unknown';
     if (typeof m === 'string') return m.replace(/_/g, ' ');
@@ -190,7 +221,7 @@ export default function Ledger() {
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           {isAdmin && (
             <div
               style={{
@@ -218,6 +249,35 @@ export default function Ledger() {
                 My Debts Only
               </button>
             </div>
+          )}
+
+          {/* Export CSV Button */}
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={handleExportCsv}
+            disabled={isExporting}
+            id="export-debts-btn"
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            aria-label="Export debts as CSV"
+          >
+            {isExporting ? <Loader size={15} className="animate-spin" /> : <Download size={15} />}
+            Export CSV
+          </button>
+
+          {/* Admin Import CSV Button */}
+          {isAdmin && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setIsImportModalOpen(true)}
+              id="import-debts-btn"
+              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+              aria-label="Import debts from CSV"
+            >
+              <Upload size={15} />
+              Import CSV
+            </button>
           )}
 
           <button
@@ -553,6 +613,13 @@ export default function Ledger() {
       <AddDebtModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
+        onSuccess={() => refetch()}
+      />
+
+      {/* Admin CSV Import Modal */}
+      <ImportDebtsModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
         onSuccess={() => refetch()}
       />
     </div>

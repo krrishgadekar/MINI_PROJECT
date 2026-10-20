@@ -350,6 +350,38 @@ describe('Groups API — GET /api/groups/:id & POST /api/groups/:id/invite', () 
     expect(res.status).toBe(403);
     expect(res.body.code).toBe('FORBIDDEN_GROUP');
   });
+
+  it('paginates group members list', async () => {
+    const res = await request(app)
+      .get(`/api/groups/${groupId}/members?page=1&limit=2`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.page).toBe(1);
+    expect(res.body.totalPages).toBeGreaterThanOrEqual(1);
+    expect(res.body.total).toBeGreaterThanOrEqual(2);
+    expect(res.body.members.length).toBeLessThanOrEqual(2);
+  });
+
+  it('filters group members by role', async () => {
+    const res = await request(app)
+      .get(`/api/groups/${groupId}/members?role=admin`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.members.every((m: any) => m.role === 'admin')).toBe(true);
+  });
+
+  it('filters group members by search query q', async () => {
+    const res = await request(app)
+      .get(`/api/groups/${groupId}/members?q=Updated`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.members.length).toBe(1);
+    expect(res.body.members[0].name).toBe('Updated Owner');
+  });
 });
 
 describe('BE-07 — CRITICAL riskCategory accepted', () => {

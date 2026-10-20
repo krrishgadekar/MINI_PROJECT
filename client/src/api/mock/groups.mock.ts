@@ -128,10 +128,17 @@ export const groupsMock = {
     };
   },
 
-  getMembers: async (groupId: string): Promise<{ success: boolean; members: EnrichedMembership[] }> => {
+  getMembers: async (
+    groupId: string,
+    _params?: any
+  ): Promise<{ success: boolean; members: EnrichedMembership[]; total?: number; page?: number; totalPages?: number }> => {
+    const list = mockMemberships.filter((m) => m.groupId === groupId);
     return {
       success: true,
-      members: mockMemberships.filter((m) => m.groupId === groupId),
+      members: list,
+      total: list.length,
+      page: 1,
+      totalPages: 1,
     };
   },
 

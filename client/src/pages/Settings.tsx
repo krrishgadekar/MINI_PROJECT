@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import {
-  Bell, Moon, Sun, Shield, Globe, Clock, Zap, LinkIcon,
-  CheckCircle, Save, Loader,
+  Bell, Moon, Sun, Shield, Globe, Clock, Zap,
+  CheckCircle, Save, Loader, Laptop, Smartphone, Trash2, Key, RefreshCw,
 } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { api } from "../api";
 import { useNotificationPreferences, useUpdateNotificationPreferences } from "../hooks/useNotifications";
 import { useToast } from "../components/ui/Toast";
 import { Skeleton } from "../components/ui";
@@ -284,48 +286,305 @@ export default function Settings() {
         </section>
 
         {/* ── Connected Sessions ───────────────────────────────────────────── */}
-        <section aria-labelledby="sessions-heading" className="glass-card">
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
-            <LinkIcon size={18} color="var(--accent-light)" aria-hidden="true" />
-            <h2 id="sessions-heading" style={{ fontSize: "var(--font-size-md)", fontWeight: 700 }}>Connected Sessions</h2>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 0", borderBottom: "1px solid var(--border-secondary)" }}>
-            <div>
-              <div style={{ fontSize: "var(--font-size-sm)", fontWeight: 500 }}>Active Sessions</div>
-              <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>Manage devices with access to your account</div>
-            </div>
-            <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", padding: "4px 10px", background: "var(--bg-elevated)", borderRadius: 6, border: "1px solid var(--border-secondary)" }}>
-              Coming soon
-            </span>
-          </div>
-          <div style={{ padding: "16px 0 4px", fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
-            Session management will be available when Chetan's tenancy API exposes the sessions endpoint.
-          </div>
-        </section>
+        <SessionsSection />
 
         {/* ── Security ────────────────────────────────────────────────────── */}
-        <section aria-labelledby="security-heading" className="glass-card">
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
-            <Shield size={18} color="var(--accent-light)" aria-hidden="true" />
-            <h2 id="security-heading" style={{ fontSize: "var(--font-size-md)", fontWeight: 700 }}>Security</h2>
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0", borderBottom: "1px solid var(--border-secondary)" }}>
-            <div>
-              <div style={{ fontSize: "var(--font-size-sm)", fontWeight: 500 }}>Change Password</div>
-              <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", marginTop: 2 }}>Update your account password</div>
-            </div>
-            <button id="change-password-btn" className="btn btn-secondary btn-sm" aria-label="Change password">Change</button>
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0" }}>
-            <div>
-              <div style={{ fontSize: "var(--font-size-sm)", fontWeight: 500, color: "var(--risk-critical)" }}>Delete Account</div>
-              <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", marginTop: 2 }}>Permanently remove your account and all data</div>
-            </div>
-            <button id="delete-account-btn" className="btn btn-danger btn-sm" aria-label="Delete account permanently">Delete</button>
-          </div>
-        </section>
+        <SecuritySection />
       </div>
     </div>
+  );
+}
+
+// ─── Sessions & Security Sections ─────────────────────────────────────────────
+
+function SessionsSection() {
+  const { success: showSuccess, error: showError } = useToast();
+  const queryClient = useQueryClient();
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+
+  const { data, isLoading, refetch, isFetching } = useQuery({
+    queryKey: ['auth-sessions'],
+    queryFn: () => api.auth.getSessions(),
+    staleTime: 30_000,
+  });
+
+  const handleRevoke = async (sessionId: string) => {
+    try {
+      setRevokingId(sessionId);
+      await api.auth.revokeSession(sessionId);
+      showSuccess("Session revoked successfully.");
+      queryClient.invalidateQueries({ queryKey: ['auth-sessions'] });
+    } catch (err: any) {
+      showError(err?.response?.data?.message || err?.message || "Failed to revoke session.");
+    } finally {
+      setRevokingId(null);
+    }
+  };
+
+  const sessions = data?.sessions || [];
+
+  return (
+    <section aria-labelledby="sessions-heading" className="glass-card">
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <Laptop size={18} color="var(--accent-light)" aria-hidden="true" />
+          <h2 id="sessions-heading" style={{ fontSize: "var(--font-size-md)", fontWeight: 700 }}>Connected Sessions</h2>
+        </div>
+        <button
+          onClick={() => refetch()}
+          className="btn btn-secondary btn-sm"
+          disabled={isFetching}
+          style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "var(--font-size-xs)" }}
+        >
+          <RefreshCw size={13} className={isFetching ? "spin" : ""} />
+          Refresh
+        </button>
+      </div>
+
+      <p style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", marginBottom: 16 }}>
+        Devices and browsers with active refresh tokens for your account. You can revoke any unrecognized session.
+      </p>
+
+      {isLoading ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <Skeleton height={56} />
+          <Skeleton height={56} />
+        </div>
+      ) : sessions.length === 0 ? (
+        <div style={{ padding: "20px 0", textAlign: "center", color: "var(--text-muted)", fontSize: "var(--font-size-sm)" }}>
+          No active sessions detected.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {sessions.map((sess) => (
+            <div
+              key={sess.id}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "12px 14px",
+                borderRadius: 10,
+                background: "var(--bg-elevated)",
+                border: "1px solid var(--border-secondary)",
+                gap: 12,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 8,
+                  background: "var(--accent-subtle)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "var(--accent-light)",
+                  flexShrink: 0,
+                }}>
+                  {sess.deviceInfo?.toLowerCase().includes("mobile") || sess.deviceInfo?.toLowerCase().includes("android") || sess.deviceInfo?.toLowerCase().includes("iphone") ? (
+                    <Smartphone size={18} />
+                  ) : (
+                    <Laptop size={18} />
+                  )}
+                </div>
+                <div>
+                  <div style={{ fontSize: "var(--font-size-sm)", fontWeight: 600 }}>
+                    {sess.deviceInfo || "Unknown Device"}
+                  </div>
+                  <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", marginTop: 2 }}>
+                    IP: {sess.ipAddress || "Unknown"} • Last active: {new Date(sess.lastUsed).toLocaleString()}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => handleRevoke(sess.id)}
+                disabled={revokingId === sess.id}
+                className="btn btn-danger btn-sm"
+                style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "var(--font-size-xs)" }}
+              >
+                {revokingId === sess.id ? (
+                  <><Loader size={12} className="spin" /> Revoking...</>
+                ) : (
+                  <><Trash2 size={12} /> Revoke</>
+                )}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SecuritySection() {
+  const { success: showSuccess, error: showError } = useToast();
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [formOpen, setFormOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setValidationError(null);
+
+    if (!oldPassword) {
+      setValidationError("Current password is required.");
+      return;
+    }
+    if (newPassword.length < 8) {
+      setValidationError("New password must be at least 8 characters long.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setValidationError("New passwords do not match.");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      await api.auth.changePassword({ oldPassword, newPassword });
+      showSuccess("Password updated successfully!");
+      setOldPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setFormOpen(false);
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || "Failed to update password.";
+      setValidationError(msg);
+      showError(msg);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <section aria-labelledby="security-heading" className="glass-card">
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+        <Shield size={18} color="var(--accent-light)" aria-hidden="true" />
+        <h2 id="security-heading" style={{ fontSize: "var(--font-size-md)", fontWeight: 700 }}>Security</h2>
+      </div>
+
+      {/* Change Password Bar / Form */}
+      <div style={{ padding: "14px 0", borderBottom: "1px solid var(--border-secondary)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontSize: "var(--font-size-sm)", fontWeight: 500 }}>Change Password</div>
+            <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", marginTop: 2 }}>
+              Update your account password with bcrypt hashing (min 8 chars)
+            </div>
+          </div>
+          <button
+            id="change-password-toggle-btn"
+            className="btn btn-secondary btn-sm"
+            onClick={() => setFormOpen((prev) => !prev)}
+            aria-expanded={formOpen}
+          >
+            {formOpen ? "Cancel" : "Change Password"}
+          </button>
+        </div>
+
+        {formOpen && (
+          <form onSubmit={handleSubmit} style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+            {validationError && (
+              <div style={{
+                padding: "8px 12px",
+                borderRadius: 6,
+                background: "rgba(239, 68, 68, 0.15)",
+                border: "1px solid var(--risk-critical)",
+                color: "var(--risk-critical)",
+                fontSize: "var(--font-size-xs)",
+              }}>
+                {validationError}
+              </div>
+            )}
+
+            <div>
+              <label htmlFor="old-password" style={{ display: "block", fontSize: "var(--font-size-xs)", fontWeight: 600, marginBottom: 4 }}>
+                Current Password *
+              </label>
+              <input
+                id="old-password"
+                type="password"
+                className="input-field"
+                placeholder="Enter current password"
+                value={oldPassword}
+                onChange={(e) => setOldPassword(e.target.value)}
+                style={{ width: "100%", padding: "8px 12px", fontSize: "var(--font-size-sm)" }}
+                required
+              />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div>
+                <label htmlFor="new-password" style={{ display: "block", fontSize: "var(--font-size-xs)", fontWeight: 600, marginBottom: 4 }}>
+                  New Password (min 8 chars) *
+                </label>
+                <input
+                  id="new-password"
+                  type="password"
+                  className="input-field"
+                  placeholder="At least 8 characters"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  style={{ width: "100%", padding: "8px 12px", fontSize: "var(--font-size-sm)" }}
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="confirm-password" style={{ display: "block", fontSize: "var(--font-size-xs)", fontWeight: 600, marginBottom: 4 }}>
+                  Confirm New Password *
+                </label>
+                <input
+                  id="confirm-password"
+                  type="password"
+                  className="input-field"
+                  placeholder="Repeat new password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  style={{ width: "100%", padding: "8px 12px", fontSize: "var(--font-size-sm)" }}
+                  required
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8 }}>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setFormOpen(false)}
+                disabled={submitting}
+              >
+                Cancel
+              </button>
+              <button
+                id="submit-change-password-btn"
+                type="submit"
+                className="btn btn-primary btn-sm"
+                disabled={submitting}
+                style={{ display: "flex", alignItems: "center", gap: 6 }}
+              >
+                {submitting ? (
+                  <><Loader size={14} className="spin" /> Updating...</>
+                ) : (
+                  <><Key size={14} /> Update Password</>
+                )}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0" }}>
+        <div>
+          <div style={{ fontSize: "var(--font-size-sm)", fontWeight: 500, color: "var(--risk-critical)" }}>Delete Account</div>
+          <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", marginTop: 2 }}>Permanently remove your account and all data</div>
+        </div>
+        <button id="delete-account-btn" className="btn btn-danger btn-sm" aria-label="Delete account permanently">Delete</button>
+      </div>
+    </section>
   );
 }
 

@@ -13,6 +13,7 @@ import {
   Sparkles,
   X,
   Layers,
+  Search,
 } from 'lucide-react';
 import { useUiStore } from '../store/useUiStore';
 import { useNotifications } from '../hooks/useNotifications';
@@ -152,6 +153,38 @@ export default function Sidebar() {
               ))
             )}
           </select>
+        </div>
+
+        {/* Quick Search Button (triggers Ctrl+K) */}
+        <div style={{ padding: '8px 16px' }}>
+          <button
+            type="button"
+            onClick={() => {
+              window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }));
+            }}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '8px 12px',
+              borderRadius: 8,
+              background: 'var(--bg-tertiary, rgba(255, 255, 255, 0.04))',
+              border: '1px solid var(--border-secondary, rgba(255, 255, 255, 0.08))',
+              color: 'var(--text-muted, #94a3b8)',
+              fontSize: '0.8rem',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Search size={14} />
+              <span>Search...</span>
+            </div>
+            <kbd style={{ fontSize: 10, padding: '2px 5px', borderRadius: 4, background: 'var(--bg-elevated, rgba(255, 255, 255, 0.1))', color: 'var(--text-secondary)' }}>
+              Ctrl+K
+            </kbd>
+          </button>
         </div>
 
         {/* Navigation Links */}

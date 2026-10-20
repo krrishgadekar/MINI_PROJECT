@@ -6,6 +6,7 @@ import { GroupRequest } from '../middleware/group.middleware';
 import { Group, Membership, IGroup } from '../models/Group';
 import { Merchant } from '../models/Merchant';
 import { AppError } from '../utils/errors';
+import { parsePaginationParams } from '../utils/paginate';
 import crypto from 'crypto';
 
 // ── Validation schemas ────────────────────────────────────────────────────────
@@ -277,22 +278,53 @@ export const listMembers = async (
       throw new AppError(400, 'VALIDATION', 'Invalid group ID.');
     }
 
-    const memberships = await Membership.find({
+    const { page, limit, skip, sort } = parsePaginationParams(req.query, { joinedAt: -1 });
+
+    const filter: Record<string, unknown> = {
       groupId: new mongoose.Types.ObjectId(id),
-    }).populate<{ merchantId: { _id: mongoose.Types.ObjectId; name: string; email: string } }>(
-      'merchantId',
-      'name email',
-    );
+    };
+
+    if (req.query.role) {
+      filter.role = req.query.role;
+    }
+
+    if (req.query.q) {
+      const q = (req.query.q as string).trim();
+      const regex = new RegExp(q, 'i');
+      const matchingMerchants = await Merchant.find({
+        $or: [{ name: regex }, { email: regex }],
+      }).select('_id');
+      const merchantIds = matchingMerchants.map((m) => m._id);
+      filter.merchantId = { $in: merchantIds };
+    }
+
+    const total = await Membership.countDocuments(filter);
+
+    const memberships = await Membership.find(filter)
+      .populate<{ merchantId: { _id: mongoose.Types.ObjectId; name: string; email: string } }>(
+        'merchantId',
+        'name email',
+      )
+      .sort(sort)
+      .skip(skip)
+      .limit(limit);
 
     const members = memberships.map((m) => ({
-      merchantId: (m.merchantId as any)._id?.toString() || m.merchantId.toString(),
-      name: (m.merchantId as any).name,
-      email: (m.merchantId as any).email,
+      merchantId: (m.merchantId as any)?._id?.toString() || m.merchantId?.toString(),
+      name: (m.merchantId as any)?.name,
+      email: (m.merchantId as any)?.email,
       role: m.role,
       joinedAt: m.joinedAt,
     }));
 
-    res.json({ success: true, members });
+    res.json({
+      success: true,
+      count: members.length,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      members,
+    });
   } catch (error) {
     next(error);
   }

@@ -98,6 +98,89 @@
 }
 
 /* ---------------------------------------------------------------------------
+   Light Theme Overrides — data-theme="light" on <html>
+   --------------------------------------------------------------------------- */
+[data-theme="light"] {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #f1f5f9;
+  --bg-tertiary: #e2e8f0;
+  --bg-elevated: #ffffff;
+  --bg-glass: rgba(255, 255, 255, 0.85);
+  --bg-glass-hover: rgba(248, 250, 252, 0.95);
+  --bg-glass-strong: rgba(255, 255, 255, 0.95);
+
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --text-accent: #6d28d9;
+  --text-bright: #000000;
+
+  --border-primary: rgba(124, 58, 237, 0.15);
+  --border-secondary: rgba(0, 0, 0, 0.08);
+  --border-glass: rgba(0, 0, 0, 0.06);
+  --border-glow: rgba(124, 58, 237, 0.25);
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.12);
+  --shadow-glow: 0 0 30px rgba(124, 58, 237, 0.08);
+  --shadow-glow-strong: 0 0 60px rgba(124, 58, 237, 0.1);
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="light"] body {
+  background-image:
+    radial-gradient(ellipse at 15% 10%, rgba(99, 102, 241, 0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 85% 90%, rgba(168, 85, 247, 0.025) 0%, transparent 50%);
+}
+
+/* ---------------------------------------------------------------------------
+   Accessibility — Focus Rings & Reduced Motion
+   --------------------------------------------------------------------------- */
+
+/* Universal focus ring — only shows on keyboard navigation */
+:focus-visible {
+  outline: 2px solid var(--accent-light);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Skip link for screen readers */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 9999;
+  padding: 8px 16px;
+  background: var(--accent);
+  color: white;
+  font-size: var(--font-size-sm);
+  border-radius: 0 0 8px 0;
+}
+.skip-link:focus {
+  left: 0;
+}
+
+/* Respect user's reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Colour contrast fix — muted text on light theme must meet WCAG AA
+   --------------------------------------------------------------------------- */
+[data-theme="light"] .text-muted-accessible {
+  color: #475569; /* contrast 4.6:1 on white */
+}
+
+/* ---------------------------------------------------------------------------
    Reset & Base Styles
    --------------------------------------------------------------------------- */
 *,

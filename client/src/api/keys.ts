@@ -37,10 +37,12 @@ export const queryKeys = {
     merchant: (id: string) => [...queryKeys.risk.all, 'merchant', id] as const,
     score: (merchantId: string) => [...queryKeys.risk.all, 'score', merchantId] as const,
     portfolio: () => [...queryKeys.risk.all, 'portfolio'] as const,
+    trend: (merchantId: string) => [...queryKeys.risk.all, 'trend', merchantId] as const,
   },
   notifications: {
     all: ['notifications'] as const,
     list: (params?: Record<string, any>) => [...queryKeys.notifications.all, 'list', params] as const,
+    preferences: () => [...queryKeys.notifications.all, 'preferences'] as const,
   },
   audit: {
     all: ['audit'] as const,

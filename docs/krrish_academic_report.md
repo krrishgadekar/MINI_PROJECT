@@ -114,8 +114,82 @@ All empirical benchmarks were executed using Python 3.11 with `numpy`, `scipy`, 
 
 ---
 
-## 5. Conclusion
+## 5. Phase 4 — Hardening & Cross-Algorithm Validation
+
+Phase 4 focuses on quality assurance through crosswise bug-bash testing, invariant verification, and stress testing. All hardening tests are implemented in `tests/test_phase4_hardening.py` and `tests/test_api_phase4_stress.py`.
+
+### 5.1 Cross-Algorithm Verification
+
+| Verification | What It Proves | Test Method |
+|---|---|---|
+| **SCC ↔ Warshall Consistency** | Every pair within a Tarjan SCC of size ≥2 appears as a mutual-reachability pair in Warshall's cyclic risk pairs | 10 random 15-node graphs; asserts containment in both directions |
+| **Exact ≤ Greedy** | Exact solver never produces more transactions than greedy heuristic | Tested for $N \in [3, 10]$ with randomized graphs |
+| **Netting → DAG** | After `net_all_cycles`, the graph contains zero directed cycles | 5 random 12-node graphs; `has_cycle` returns False |
+| **Balance Conservation** | Cycle netting does not alter any merchant's net balance (only redistributes debt edges) | Pre/post net balance comparison across 10 random graphs |
+| **Debt Volume Monotonicity** | Total edge weight never increases after netting | Before/after sum of edge weights |
+| **Settlement Clears Balances** | Replaying all settlement transactions on net balances produces zero for every merchant | 10 random graphs; both greedy and exact |
+| **Contagion Loss Bound** | Total contagion loss ≤ total network debt (no amplification beyond existing debt) | All merchants tested on 10-node graph |
+
+### 5.2 Mathematical Invariants
+
+| Invariant | Formal Statement | Status |
+|---|---|---|
+| **Balance Sum = 0** | $\sum_{i=1}^{N} B_i = 0$ for all closed debt networks | ✓ Verified across 20 random graphs |
+| **Greedy Upper Bound** | Greedy settlement uses at most $|S| - 1$ transactions where $|S|$ = non-zero balance count | ✓ Verified for 10 graphs |
+| **SCC Partition** | Tarjan's SCCs form a disjoint, complete partition of all merchants (every merchant in exactly one SCC) | ✓ Verified for 10 random graphs |
+| **Warshall Reflexive + Transitive** | Closure[i][i] = True ∀i; Closure[a][b] ∧ Closure[b][c] ⟹ Closure[a][c] | ✓ Verified on 8-node graph |
+| **Vulnerability ∈ [0,1]** | Network vulnerability score = total loss / total debt, bounded in unit interval | ✓ Verified for all merchants on 10-node graph |
+| **Risk Category Monotonic** | Increasing $\lambda$ ⟹ non-decreasing risk category (LOW → MEDIUM → HIGH → CRITICAL) | ✓ Verified for $\lambda \in [0/12, 12/12]$ |
+| **Composite Score ∈ [0,1]** | $0 \le 0.4 \cdot \text{norm}(\lambda) + 0.4 \cdot (1-p) + 0.2 \cdot \text{norm}(d) \le 1$ | ✓ Verified across extreme parameter grid |
+
+### 5.3 Boundary & Degenerate Input Testing
+
+| Scenario | Algorithms Tested | Expected Behavior |
+|---|---|---|
+| Empty graph (0 merchants) | All | Returns empty/zero results, no crash |
+| Single node | SCC, Settlement, Exact | Singleton SCC, 0 transactions |
+| Self-debt (A→A) | Balance computation | Net balance remains 0 |
+| Perfectly balanced cycle | Exact, Greedy | 0 transactions needed |
+| Exact solver at cap (N=12) | Exact | Uses DP, not fallback |
+| Beyond cap (N>12) | Exact | Falls back to greedy with `capped=True` |
+| Fractional amounts (33.33) | Exact, Netting | No floating point drift |
+| Very small amounts (0.01) | Greedy | Correct 1-transaction settlement |
+| Very large amounts (10⁹) | Greedy | No overflow |
+| Z-test with 0 trials | Z-test | Safe defaults (z=0, not significant) |
+| Baseline p=0 or p=1 | Z-test | SE guard returns z=0 |
+| Empty correlation series | Pearson | Returns r=0, not significant |
+
+### 5.4 Concurrent Execution & Stress Testing
+
+| Test | Scale | Purpose |
+|---|---|---|
+| 10 parallel exact solvers | 5 threads | Verify stateless engine has no shared state corruption |
+| 10 parallel SCC calls | 5 threads | Thread safety of Tarjan's algorithm |
+| 5 parallel contagion simulations | 5 threads | Same graph, different failed merchants |
+| Mixed parallel (SCC + exact + contagion) | 6 threads | Cross-endpoint concurrency |
+| Warshall on 50 nodes, 60% density | 1 | Performance regression gate |
+| Tarjan on 100 nodes | 1 | Linear scaling validation |
+| Greedy on 500 merchants | 1 | Sparse graph stress |
+| Risk engine on 1000 merchants | 1 | Portfolio scoring at scale |
+| API: 10 parallel /settlement/exact | 5 threads | FastAPI endpoint thread safety |
+| API: large payload (50-node SCC) | 1 | Payload size handling |
+| API: 1000-element correlation series | 1 | Statistical endpoint throughput |
+
+### 5.5 API-Level Endpoint Consistency
+
+| Check | Endpoints | Assertion |
+|---|---|---|
+| Savings = net-all total | `/settlement/optimize` vs `/settlement/net-all` | `optimize.savings == net_all.total_amount_netted` |
+| Same total $ settled | `/settlement/exact` vs `/settlement` (greedy) | `abs(exact_total - greedy_total) < 1.0` |
+| Acyclic ⟹ no SCC cycles | `/graph/scc` vs `/settlement/cycles` | `cyclic_count == 0` and `has_cycle == false` |
+| Cyclic ⟹ SCC detects | `/graph/scc` vs `/settlement/cycles` | `cyclic_count >= 1` and `has_cycle == true` |
+| risk_category == risk_label | `/risk/score` | K9 fix: CRITICAL ↔ CRITICAL (no VERY_HIGH alias) |
+
+---
+
+## 6. Conclusion
 CreditFlow v2 establishes rigorous traceability between computer science theory and real-world financial software engineering:
-1. **DAA:** Proved the exact vs greedy settlement trade-off with mathematical proofs and empirical benchmarks.
-2. **DSGT:** Combined Tarjan's linear SCC grouping with Warshall's cubic reachability to provide both speed and depth.
-3. **SMCS:** Upgraded cold-start Poisson risk with one-proportion z-tests, Pearson correlation, and systemic contagion simulation.
+1. **DAA:** Proved the exact vs greedy settlement trade-off with mathematical proofs and empirical benchmarks. Phase 4 cross-verified that exact ≤ greedy across all tested inputs.
+2. **DSGT:** Combined Tarjan's linear SCC grouping with Warshall's cubic reachability to provide both speed and depth. Phase 4 verified SCC ↔ Warshall consistency on random graphs.
+3. **SMCS:** Upgraded cold-start Poisson risk with one-proportion z-tests, Pearson correlation, and systemic contagion simulation. Phase 4 hardened all statistical methods against boundary inputs (zero trials, degenerate variance, extreme baselines).
+4. **SE (Software Engineering):** Phase 4 hardening suite covers 9 test categories with 88 dedicated hardening and stress test cases (221 overall across test suites) including concurrent stress, invariant verification, floating-point guards, and crosswise bug-bash across all algorithm modules.

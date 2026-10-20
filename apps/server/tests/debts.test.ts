@@ -147,3 +147,213 @@ describe('Debts API', () => {
     expect(fetch.body.debts[0].amount).toBe(0);
   });
 });
+
+describe('Debts CSV Export & Import (BE-31)', () => {
+  let memberAccessToken: string;
+  let otherGroupId: string;
+
+  beforeAll(async () => {
+    // Register a member login token
+    const memberLogin = await request(app).post('/api/auth/login').send({
+      email: 'debtor@test.com',
+      password: 'hash', // note: was created directly in DB, so let's update passwordHash or register
+    });
+
+    if (memberLogin.status === 200) {
+      memberAccessToken = memberLogin.body.accessToken;
+    } else {
+      // Create user with proper password
+      const reg = await request(app).post('/api/auth/register').send({
+        name: 'Real Member',
+        email: 'realmember@test.com',
+        password: 'password123',
+      });
+      memberAccessToken = reg.body.accessToken;
+      await Membership.create({
+        groupId: new mongoose.Types.ObjectId(groupId),
+        merchantId: new mongoose.Types.ObjectId(reg.body.merchant.id),
+        role: 'member',
+      });
+    }
+
+    // Create a second group for cross-tenant isolation testing
+    const groupB = await request(app)
+      .post('/api/groups')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ name: 'Group B for Isolation', type: 'other' });
+    otherGroupId = groupB.body.group._id;
+
+    // Add an active debt in Group A
+    await request(app)
+      .post('/api/debts')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Group-Id', groupId)
+      .send({
+        debtorId,
+        creditorId,
+        amount: 8888,
+        note: 'Group A Specific Debt',
+      });
+
+    // Add an active debt in Group B
+    await request(app)
+      .post('/api/debts')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Group-Id', otherGroupId)
+      .send({
+        debtorId,
+        creditorId,
+        amount: 9999,
+        note: 'Group B Specific Debt',
+      });
+  });
+
+  describe('GET /api/debts/export.csv', () => {
+    it('streams CSV with correct headers and group data for admin', async () => {
+      const res = await request(app)
+        .get('/api/debts/export.csv')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Group-Id', groupId);
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toContain('text/csv');
+      expect(res.headers['content-disposition']).toContain('attachment; filename="debts_export.csv"');
+
+      const csv = res.text;
+      expect(csv).toContain('id,debtorId,debtorName,debtorEmail,creditorId,creditorName,creditorEmail,amount,remainingAmount,status,dueDate,note,createdAt');
+      expect(csv).toContain('8888');
+      expect(csv).toContain('Group A Specific Debt');
+    });
+
+    it('enforces cross-group isolation: does not leak Group B debts into Group A export', async () => {
+      const res = await request(app)
+        .get('/api/debts/export.csv')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Group-Id', groupId);
+
+      expect(res.text).toContain('8888');
+      expect(res.text).not.toContain('9999');
+      expect(res.text).not.toContain('Group B Specific Debt');
+    });
+
+    it('enforces role scoping: member cannot request scope=all', async () => {
+      const res = await request(app)
+        .get('/api/debts/export.csv?scope=all')
+        .set('Authorization', `Bearer ${memberAccessToken}`)
+        .set('X-Group-Id', groupId);
+
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('FORBIDDEN_GROUP');
+    });
+  });
+
+  describe('POST /api/debts/import', () => {
+    it('rejects non-admin member import with 403', async () => {
+      const res = await request(app)
+        .post('/api/debts/import')
+        .set('Authorization', `Bearer ${memberAccessToken}`)
+        .set('X-Group-Id', groupId)
+        .send({ csvText: 'debtor,creditor,amount\nrealmember@test.com,creditor@test.com,100' });
+
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('FORBIDDEN_GROUP');
+    });
+
+    it('returns per-row errors in dry-run mode for invalid rows', async () => {
+      const invalidCsv = `debtor,creditor,amount,dueDate,note
+${debtorId},${debtorId},500,2026-12-01,Self debt error
+nonexistent@test.com,${creditorId},1000,2026-12-01,Unknown debtor
+${debtorId},${creditorId},-200,2026-12-01,Negative amount`;
+
+      const res = await request(app)
+        .post('/api/debts/import?dryRun=true')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Group-Id', groupId)
+        .send({ csvText: invalidCsv });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.dryRun).toBe(true);
+      expect(res.body.totalRows).toBe(3);
+      expect(res.body.errorCount).toBe(3);
+      expect(res.body.errors.length).toBe(3);
+      expect(res.body.errors[0].row).toBe(1);
+      expect(res.body.errors[0].errors[0]).toContain('same merchant');
+    });
+
+    it('returns valid preview in dry-run mode without writing to database', async () => {
+      const validCsv = `debtor,creditor,amount,dueDate,note
+debtor@test.com,creditor@test.com,7777,2026-12-01,Dry Run Test Note`;
+
+      const res = await request(app)
+        .post('/api/debts/import?dryRun=true')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Group-Id', groupId)
+        .send({ csvText: validCsv });
+
+      expect(res.status).toBe(200);
+      expect(res.body.dryRun).toBe(true);
+      expect(res.body.validCount).toBe(1);
+      expect(res.body.errorCount).toBe(0);
+      expect(res.body.preview[0].amount).toBe(7777);
+
+      // Verify not inserted in DB
+      const checkDb = await request(app)
+        .get('/api/debts?scope=all&q=Dry Run Test Note')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Group-Id', groupId);
+      expect(checkDb.body.debts.length).toBe(0);
+    });
+
+    it('successfully imports valid CSV rows creating active debts and audit logs', async () => {
+      const validCsv = `debtor,creditor,amount,dueDate,note
+debtor@test.com,creditor@test.com,12345,2026-12-01,Imported Active Debt Note`;
+
+      const res = await request(app)
+        .post('/api/debts/import')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Group-Id', groupId)
+        .send({ csvText: validCsv });
+
+      expect(res.status).toBe(201);
+      expect(res.body.success).toBe(true);
+      expect(res.body.dryRun).toBe(false);
+      expect(res.body.importedCount).toBe(1);
+      expect(res.body.debts[0].status).toBe('active');
+      expect(res.body.debts[0].amount).toBe(12345);
+      expect(res.body.debts[0].originalAmount).toBe(12345);
+
+      // Verify debt is active in database
+      const checkDb = await request(app)
+        .get('/api/debts?scope=all&q=Imported Active Debt Note')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Group-Id', groupId);
+
+      expect(checkDb.body.debts.length).toBe(1);
+      expect(checkDb.body.debts[0].status).toBe('active');
+
+      // Verify audit log created
+      const auditRes = await request(app)
+        .get('/api/audit')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Group-Id', groupId);
+
+      expect(auditRes.body.audit.some((a: any) => a.action === 'DEBT_IMPORT')).toBe(true);
+    });
+
+    it('accepts multipart form file upload', async () => {
+      const csvBuffer = Buffer.from(`debtor,creditor,amount,dueDate,note\ndebtor@test.com,creditor@test.com,3333,2026-12-01,Multipart Test`);
+
+      const res = await request(app)
+        .post('/api/debts/import')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Group-Id', groupId)
+        .attach('file', csvBuffer, 'debts.csv');
+
+      expect(res.status).toBe(201);
+      expect(res.body.importedCount).toBe(1);
+      expect(res.body.debts[0].amount).toBe(3333);
+    });
+  });
+});
+

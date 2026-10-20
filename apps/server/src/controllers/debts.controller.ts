@@ -855,3 +855,366 @@ export const settleDebt = async (
     next(error);
   }
 };
+
+const DebtImportRowSchema = z.object({
+  debtor: z.string().min(1, 'Debtor is required'),
+  creditor: z.string().min(1, 'Creditor is required'),
+  amount: z.preprocess((val) => Number(val), z.number().positive('Amount must be positive')),
+  dueDate: z.string().optional(),
+  note: z.string().optional(),
+});
+
+function parseCsv(csvText: string): { headers: string[]; rows: Record<string, string>[] } {
+  const lines = csvText.split(/\r?\n/).filter((l) => l.trim().length > 0);
+  if (lines.length === 0) return { headers: [], rows: [] };
+
+  const parseLine = (line: string): string[] => {
+    const values: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        values.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    values.push(current.trim());
+    return values;
+  };
+
+  const rawHeaders = parseLine(lines[0]);
+  const headers = rawHeaders.map((h) => h.replace(/^"|"$/g, '').trim());
+
+  const rows: Record<string, string>[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const values = parseLine(lines[i]);
+    const rowObj: Record<string, string> = {};
+    headers.forEach((h, idx) => {
+      rowObj[h] = values[idx] ? values[idx].replace(/^"|"$/g, '') : '';
+    });
+    rows.push(rowObj);
+  }
+
+  return { headers, rows };
+}
+
+/**
+ * GET /api/debts/export.csv
+ * Group/role scoped streaming CSV export of debts.
+ */
+export const exportDebtsCsv = async (
+  req: GroupRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const groupId = req.groupId;
+    if (!groupId) {
+      return next(new AppError(403, 'FORBIDDEN_GROUP', 'Group access requires X-Group-Id header.'));
+    }
+
+    const role = req.role ?? 'member';
+    const requestedScope = (req.query.scope as string) ?? (role === 'member' ? 'mine' : 'all');
+
+    if (role === 'member' && requestedScope === 'all') {
+      return next(new AppError(403, 'FORBIDDEN_GROUP', 'Members may only query scope=mine.'));
+    }
+
+    const filter: Record<string, unknown> = {
+      groupId: new mongoose.Types.ObjectId(groupId),
+    };
+
+    if (requestedScope === 'mine') {
+      const merchantId = req.merchant!._id;
+      filter.$or = [{ debtorId: merchantId }, { creditorId: merchantId }];
+    }
+
+    if (req.query.status) {
+      filter.status = req.query.status as string;
+    }
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="debts_export.csv"');
+
+    const escapeCsv = (val: any): string => {
+      const str = String(val ?? '');
+      if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    res.write('id,debtorId,debtorName,debtorEmail,creditorId,creditorName,creditorEmail,amount,remainingAmount,status,dueDate,note,createdAt\n');
+
+    const cursor = Debt.find(filter)
+      .populate('debtorId', 'name email')
+      .populate('creditorId', 'name email')
+      .sort({ createdAt: -1 })
+      .cursor();
+
+    for await (const doc of cursor) {
+      const debtor = doc.debtorId as any;
+      const creditor = doc.creditorId as any;
+      const debtorIdStr = debtor?._id ? debtor._id.toString() : (doc.debtorId?.toString() || '');
+      const creditorIdStr = creditor?._id ? creditor._id.toString() : (doc.creditorId?.toString() || '');
+
+      const row = [
+        doc._id.toString(),
+        debtorIdStr,
+        escapeCsv(debtor?.name || ''),
+        escapeCsv(debtor?.email || ''),
+        creditorIdStr,
+        escapeCsv(creditor?.name || ''),
+        escapeCsv(creditor?.email || ''),
+        doc.originalAmount ?? doc.amount,
+        doc.amount,
+        doc.status,
+        doc.dueDate ? doc.dueDate.toISOString() : '',
+        escapeCsv(doc.note || ''),
+        doc.createdAt ? doc.createdAt.toISOString() : '',
+      ].join(',');
+
+      res.write(row + '\n');
+    }
+
+    res.end();
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/debts/import
+ * Admin only. Multipart CSV or raw/json CSV import.
+ * Zod row validation, dry-run mode returning per-row errors, creates 'active' debts, audits.
+ */
+export const importDebtsCsv = async (
+  req: GroupRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const groupId = req.groupId;
+    if (!groupId) {
+      return next(new AppError(403, 'FORBIDDEN_GROUP', 'Group access requires X-Group-Id header.'));
+    }
+
+    const role = req.role ?? 'member';
+    if (role !== 'admin' && role !== 'owner') {
+      return next(new AppError(403, 'FORBIDDEN_GROUP', 'Admin role required to import debts.'));
+    }
+
+    const isDryRun =
+      req.query.dryRun === 'true' ||
+      req.body?.dryRun === 'true' ||
+      req.body?.dryRun === true;
+
+    let csvContent = '';
+    if (req.file && req.file.buffer) {
+      csvContent = req.file.buffer.toString('utf-8');
+    } else if (typeof req.body === 'string') {
+      csvContent = req.body;
+    } else if (req.body?.csvText) {
+      csvContent = req.body.csvText;
+    } else if (req.body?.csv) {
+      csvContent = req.body.csv;
+    }
+
+    if (!csvContent.trim()) {
+      res.status(400).json({ success: false, message: 'CSV file or content is required.' });
+      return;
+    }
+
+    const { rows } = parseCsv(csvContent);
+    if (rows.length === 0) {
+      res.status(400).json({ success: false, message: 'CSV contains no data rows.' });
+      return;
+    }
+
+    // Fetch all group memberships once for quick in-memory validation
+    const groupMemberships = await Membership.find({
+      groupId: new mongoose.Types.ObjectId(groupId),
+    }).populate<{ merchantId: { _id: mongoose.Types.ObjectId; email: string; name: string } }>(
+      'merchantId',
+      'email name',
+    );
+
+    const memberByEmail = new Map<string, mongoose.Types.ObjectId>();
+    const memberById = new Map<string, mongoose.Types.ObjectId>();
+
+    for (const m of groupMemberships) {
+      const merchant = m.merchantId as any;
+      if (merchant?._id) {
+        memberById.set(merchant._id.toString(), merchant._id);
+        if (merchant.email) {
+          memberByEmail.set(merchant.email.toLowerCase(), merchant._id);
+        }
+      }
+    }
+
+    const validRows: Array<{
+      debtorId: mongoose.Types.ObjectId;
+      creditorId: mongoose.Types.ObjectId;
+      amount: number;
+      dueDate?: Date;
+      note?: string;
+      debtorIdentifier: string;
+      creditorIdentifier: string;
+    }> = [];
+
+    const errors: Array<{
+      row: number;
+      data: Record<string, string>;
+      errors: string[];
+    }> = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const rawRow = rows[i];
+      const rowNum = i + 1;
+      const rowErrors: string[] = [];
+
+      const debtorKey = Object.keys(rawRow).find((k) => /^debtor/i.test(k));
+      const creditorKey = Object.keys(rawRow).find((k) => /^creditor/i.test(k));
+      const amountKey = Object.keys(rawRow).find((k) => /^amount/i.test(k));
+      const dueDateKey = Object.keys(rawRow).find((k) => /^due/i.test(k));
+      const noteKey = Object.keys(rawRow).find((k) => /^note|description/i.test(k));
+
+      const debtorVal = debtorKey ? rawRow[debtorKey] : '';
+      const creditorVal = creditorKey ? rawRow[creditorKey] : '';
+      const amountVal = amountKey ? rawRow[amountKey] : '';
+      const dueDateVal = dueDateKey ? rawRow[dueDateKey] : '';
+      const noteVal = noteKey ? rawRow[noteKey] : '';
+
+      const parseResult = DebtImportRowSchema.safeParse({
+        debtor: debtorVal,
+        creditor: creditorVal,
+        amount: amountVal,
+        dueDate: dueDateVal || undefined,
+        note: noteVal || undefined,
+      });
+
+      if (!parseResult.success) {
+        const issues = parseResult.error.issues.map((iss) => `${iss.path.join('.')}: ${iss.message}`);
+        rowErrors.push(...issues);
+      } else {
+        const { debtor, creditor, amount, dueDate, note } = parseResult.data;
+
+        const resolvedDebtorId = memberById.get(debtor) || memberByEmail.get(debtor.toLowerCase());
+        if (!resolvedDebtorId) {
+          rowErrors.push(`Debtor '${debtor}' is not a member of this group.`);
+        }
+
+        const resolvedCreditorId = memberById.get(creditor) || memberByEmail.get(creditor.toLowerCase());
+        if (!resolvedCreditorId) {
+          rowErrors.push(`Creditor '${creditor}' is not a member of this group.`);
+        }
+
+        if (resolvedDebtorId && resolvedCreditorId && resolvedDebtorId.equals(resolvedCreditorId)) {
+          rowErrors.push('Debtor and creditor cannot be the same merchant.');
+        }
+
+        let parsedDueDate: Date | undefined = undefined;
+        if (dueDate) {
+          const d = new Date(dueDate);
+          if (isNaN(d.getTime())) {
+            rowErrors.push(`Invalid due date format '${dueDate}'.`);
+          } else {
+            parsedDueDate = d;
+          }
+        }
+
+        if (rowErrors.length === 0 && resolvedDebtorId && resolvedCreditorId) {
+          validRows.push({
+            debtorId: resolvedDebtorId,
+            creditorId: resolvedCreditorId,
+            amount,
+            dueDate: parsedDueDate,
+            note: note || '',
+            debtorIdentifier: debtor,
+            creditorIdentifier: creditor,
+          });
+        }
+      }
+
+      if (rowErrors.length > 0) {
+        errors.push({
+          row: rowNum,
+          data: rawRow,
+          errors: rowErrors,
+        });
+      }
+    }
+
+    if (isDryRun) {
+      res.json({
+        success: true,
+        dryRun: true,
+        totalRows: rows.length,
+        validCount: validRows.length,
+        errorCount: errors.length,
+        errors,
+        preview: validRows.slice(0, 50),
+      });
+      return;
+    }
+
+    if (errors.length > 0) {
+      res.status(400).json({
+        success: false,
+        code: 'VALIDATION_FAILED',
+        message: `Import rejected: ${errors.length} validation errors found across ${rows.length} rows. Run with dryRun=true to preview.`,
+        totalRows: rows.length,
+        validCount: validRows.length,
+        errorCount: errors.length,
+        errors,
+      });
+      return;
+    }
+
+    const createdDebts: IDebt[] = [];
+    for (const item of validRows) {
+      const debt = await Debt.create({
+        groupId: new mongoose.Types.ObjectId(groupId),
+        debtorId: item.debtorId,
+        creditorId: item.creditorId,
+        amount: item.amount,
+        originalAmount: item.amount,
+        dueDate: item.dueDate,
+        note: item.note,
+        status: 'active',
+        createdBy: req.merchant!._id,
+        confirmedBy: req.merchant!._id,
+        confirmedAt: new Date(),
+      });
+
+      await audit(req, 'DEBT_IMPORT', 'Debt', debt._id, {
+        import: true,
+        amount: debt.amount,
+        debtorId: item.debtorId,
+        creditorId: item.creditorId,
+      });
+
+      createdDebts.push(debt);
+      emitToGroup(groupId, 'debt:created', { debt });
+    }
+
+    res.status(201).json({
+      success: true,
+      dryRun: false,
+      importedCount: createdDebts.length,
+      debts: createdDebts,
+    });
+  } catch (error) {
+    next(error);
+  }
+};

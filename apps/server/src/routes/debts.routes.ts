@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import multer from 'multer';
 import {
   getAllDebts,
   getDebtById,
@@ -9,9 +10,16 @@ import {
   rejectDebt,
   disputeDebt,
   recordPayment,
+  exportDebtsCsv,
+  importDebtsCsv,
 } from '../controllers/debts.controller';
 import { protect } from '../middleware/auth.middleware';
 import { requireGroup } from '../middleware/group.middleware';
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
 
 export const debtsRouter = Router();
 
@@ -20,6 +28,8 @@ debtsRouter.use(protect);
 debtsRouter.use(requireGroup);
 
 debtsRouter.get('/', getAllDebts);
+debtsRouter.get('/export.csv', exportDebtsCsv);
+debtsRouter.post('/import', upload.single('file'), importDebtsCsv);
 debtsRouter.post('/', createDebt);
 debtsRouter.get('/:id', getDebtById);
 debtsRouter.patch('/:id', updateDebt);

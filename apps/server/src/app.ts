@@ -12,6 +12,7 @@ import { groupsRouter } from './routes/groups.routes';
 import { auditRouter } from './routes/audit.routes';
 import { errorHandler } from './middleware/errorHandler';
 import { getClientOrigins } from './config/cors';
+import { getDeepHealth } from './controllers/health.controller';
 
 export const createApp = (): Application => {
   const app = express();
@@ -47,6 +48,9 @@ export const createApp = (): Application => {
   app.get('/health', (_req, res) => {
     res.json({ status: 'healthy' });
   });
+
+  app.get('/health/deep', getDeepHealth);
+  app.get('/api/health/deep', getDeepHealth);
 
   // ── API Routes ──────────────────────────────────────────────────────────────
   app.use('/api/auth', authRouter);

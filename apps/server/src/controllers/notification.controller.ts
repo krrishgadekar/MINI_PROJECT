@@ -1,6 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { Notification } from '../models/Notification';
+import { NotificationPreference } from '../models/NotificationPreference';
 import { Types } from 'mongoose';
 
 /**
@@ -137,3 +138,77 @@ export const markAllNotificationsRead = async (
     next(error);
   }
 };
+
+/**
+ * GET /api/notifications/preferences
+ * Returns the notification preferences for the authenticated merchant.
+ */
+export const getPreferences = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const merchantId = req.merchant?.id || (req as any).user?.id;
+    if (!merchantId) {
+      res.status(401).json({ success: false, message: 'Authentication required' });
+      return;
+    }
+
+    let pref = await NotificationPreference.findOne({ merchantId: new Types.ObjectId(merchantId) });
+    if (!pref) {
+      pref = await NotificationPreference.create({
+        merchantId: new Types.ObjectId(merchantId),
+        email: req.merchant?.email || '',
+      });
+    }
+
+    res.json({
+      success: true,
+      preferences: pref,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * PATCH /api/notifications/preferences
+ * Update notification preferences for the authenticated merchant.
+ */
+export const updatePreferences = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const merchantId = req.merchant?.id || (req as any).user?.id;
+    if (!merchantId) {
+      res.status(401).json({ success: false, message: 'Authentication required' });
+      return;
+    }
+
+    const { channels, webhookUrl, email, quietHours, types } = req.body;
+
+    const updateDoc: any = {};
+    if (channels) updateDoc.channels = channels;
+    if (webhookUrl !== undefined) updateDoc.webhookUrl = webhookUrl;
+    if (email !== undefined) updateDoc.email = email;
+    if (quietHours) updateDoc.quietHours = quietHours;
+    if (types) updateDoc.types = types;
+
+    const pref = await NotificationPreference.findOneAndUpdate(
+      { merchantId: new Types.ObjectId(merchantId) },
+      { $set: updateDoc },
+      { new: true, upsert: true }
+    );
+
+    res.json({
+      success: true,
+      preferences: pref,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+

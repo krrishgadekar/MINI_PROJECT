@@ -225,8 +225,9 @@ export default function Ledger() {
             className="btn btn-primary"
             onClick={() => setIsAddModalOpen(true)}
             id="add-debt-btn"
+            aria-label="Add a new debt obligation"
           >
-            <Plus size={16} />
+            <Plus size={16} aria-hidden="true" />
             Add Debt
           </button>
         </div>
@@ -294,7 +295,7 @@ export default function Ledger() {
             background: 'var(--bg-secondary)',
           }}
         >
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <div role="tablist" aria-label="Filter debts by status" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {(
               [
                 { id: 'active', label: 'Active' },
@@ -308,6 +309,9 @@ export default function Ledger() {
               <button
                 key={tab.id}
                 type="button"
+                role="tab"
+                aria-selected={activeTab === tab.id}
+                aria-label={`Show ${tab.label} debts`}
                 onClick={() => {
                   setActiveTab(tab.id);
                   setCurrentPage(1);
@@ -322,8 +326,10 @@ export default function Ledger() {
 
           {/* Search Box */}
           <div style={{ position: 'relative', width: 260 }}>
+            <label htmlFor="ledger-search" style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }}>Search debts</label>
             <input
-              type="text"
+              id="ledger-search"
+              type="search"
               className="form-input"
               placeholder="Search debtor, creditor, note..."
               value={searchQuery}
@@ -331,10 +337,12 @@ export default function Ledger() {
                 setSearchQuery(e.target.value);
                 setCurrentPage(1);
               }}
+              aria-label="Search debts by debtor, creditor, or note"
               style={{ paddingLeft: 32, height: 34, fontSize: 13 }}
             />
             <Search
               size={14}
+              aria-hidden="true"
               style={{ position: 'absolute', left: 10, top: 10, color: 'var(--text-muted)' }}
             />
           </div>
@@ -384,31 +392,35 @@ export default function Ledger() {
           </div>
         ) : (
           <div className="data-table-wrapper" style={{ margin: 0 }}>
-            <table className="data-table">
+            <table className="data-table" aria-label="Debt obligations ledger">
               <thead>
                 <tr>
-                  <th style={{ width: '22%' }}>Debtor (Payer)</th>
-                  <th style={{ width: '22%' }}>Creditor (Payee)</th>
+                  <th style={{ width: '22%' }} scope="col">Debtor (Payer)</th>
+                  <th style={{ width: '22%' }} scope="col">Creditor (Payee)</th>
                   <th
                     style={{ width: '18%', cursor: 'pointer' }}
                     onClick={() => handleSort('amount')}
+                    scope="col"
+                    aria-sort={sortField === 'amount' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <button style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', font: 'inherit' }} aria-label="Sort by amount">
                       Remaining / Original
-                      <ArrowUpDown size={13} />
-                    </div>
+                      <ArrowUpDown size={13} aria-hidden="true" />
+                    </button>
                   </th>
-                  <th style={{ width: '15%' }}>Status</th>
+                  <th style={{ width: '15%' }} scope="col">Status</th>
                   <th
                     style={{ width: '15%', cursor: 'pointer' }}
                     onClick={() => handleSort('dueDate')}
+                    scope="col"
+                    aria-sort={sortField === 'dueDate' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <button style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', font: 'inherit' }} aria-label="Sort by due date">
                       Due Date
-                      <ArrowUpDown size={13} />
-                    </div>
+                      <ArrowUpDown size={13} aria-hidden="true" />
+                    </button>
                   </th>
-                  <th style={{ width: '8%', textAlign: 'right' }}>Action</th>
+                  <th style={{ width: '8%', textAlign: 'right' }} scope="col">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -422,6 +434,10 @@ export default function Ledger() {
                     <tr
                       key={debt._id}
                       onClick={() => navigate(`/ledger/${debt._id}`)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate(`/ledger/${debt._id}`); }}
+                      tabIndex={0}
+                      role="button"
+                      aria-label={`View debt ₹${debt.amount.toLocaleString('en-IN')} from ${debtorName} to ${creditorName}, status: ${debt.status}`}
                       style={{ cursor: 'pointer' }}
                       className="ledger-row-hover"
                     >
@@ -480,8 +496,9 @@ export default function Ledger() {
                           }}
                           style={{ padding: 6 }}
                           title="Open Transaction Detail"
+                          aria-label={`Open transaction detail for debt ${debt._id}`}
                         >
-                          <ArrowRight size={16} />
+                          <ArrowRight size={16} aria-hidden="true" />
                         </button>
                       </td>
                     </tr>

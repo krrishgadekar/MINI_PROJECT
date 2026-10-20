@@ -44,3 +44,11 @@ export function useSimulateContagion() {
     mutationFn: (data: ContagionSimulationRequest) => api.risk.contagion(data),
   });
 }
+
+export function useRiskTrend(merchantId: string) {
+  return useQuery({
+    queryKey: queryKeys.risk.trend(merchantId),
+    queryFn: () => api.risk.trend(merchantId),
+    enabled: !!merchantId,
+  });
+}

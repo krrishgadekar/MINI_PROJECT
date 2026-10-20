@@ -424,3 +424,74 @@ class TestFloatingPointPrecision:
 
 
 # ═════════════════════════════════════════════════════════════════════════════
+# 4. INPUT VALIDATION & ERROR HANDLING
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class TestInputValidation:
+    """Ensure algorithms reject bad input gracefully."""
+
+    def test_negative_debt_amount_raises(self):
+        g = MerchantGraph()
+        g.add_merchant("A")
+        g.add_merchant("B")
+        with pytest.raises(ValueError):
+            g.add_debt("A", "B", -10.0)
+
+    def test_zero_debt_amount_raises(self):
+        g = MerchantGraph()
+        g.add_merchant("A")
+        g.add_merchant("B")
+        with pytest.raises(ValueError):
+            g.add_debt("A", "B", 0.0)
+
+    def test_debt_to_unregistered_merchant_raises(self):
+        g = MerchantGraph()
+        g.add_merchant("A")
+        with pytest.raises(ValueError):
+            g.add_debt("A", "UNKNOWN", 100.0)
+
+    def test_net_cycle_with_single_node_raises(self):
+        g = MerchantGraph()
+        g.add_merchant("A")
+        with pytest.raises(ValueError):
+            net_cycle(g, ["A"])
+
+    def test_net_cycle_with_invalid_edge_raises(self):
+        g = MerchantGraph()
+        g.add_merchant("A")
+        g.add_merchant("B")
+        g.add_merchant("C")
+        g.add_debt("A", "B", 100)
+        # C->A edge doesn't exist
+        with pytest.raises(ValueError):
+            net_cycle(g, ["A", "B", "C"])
+
+    def test_contagion_invalid_merchant_raises(self):
+        g = MerchantGraph()
+        g.add_merchant("A")
+        with pytest.raises(ValueError):
+            simulate_default_contagion(g, "NONEXISTENT")
+
+    def test_pearson_mismatched_lengths_raises(self):
+        with pytest.raises(ValueError):
+            compute_pearson_correlation([1.0, 2.0], [1.0, 2.0, 3.0])
+
+    def test_duplicate_merchant_add_is_noop(self):
+        g = MerchantGraph()
+        g.add_merchant("A")
+        g.add_merchant("A")  # should not crash
+        assert g.merchant_count == 1
+
+    def test_debt_accumulation(self):
+        """Adding multiple debts between same pair should accumulate."""
+        g = MerchantGraph()
+        g.add_merchant("A")
+        g.add_merchant("B")
+        g.add_debt("A", "B", 100)
+        g.add_debt("A", "B", 50)
+        assert g.get_debt("A", "B") == 150.0
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 5. INVARIANT ASSERTIONS

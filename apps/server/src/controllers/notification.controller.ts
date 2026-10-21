@@ -86,8 +86,14 @@ export const markNotificationRead = async (
       return;
     }
 
-    const notification = await Notification.findByIdAndUpdate(
-      id,
+    const merchantId = req.merchant?.id || (req as any).user?.id;
+    if (!merchantId) {
+      res.status(401).json({ success: false, message: 'Authentication required' });
+      return;
+    }
+
+    const notification = await Notification.findOneAndUpdate(
+      { _id: new Types.ObjectId(id), merchantId: new Types.ObjectId(merchantId) },
       { $set: { readAt: new Date() } },
       { new: true },
     );

@@ -87,6 +87,7 @@ export default function AddDebtModal({ isOpen, onClose, onSuccess }: AddDebtModa
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!selectedMerchantId) {
       showToast('Please select a merchant counterparty.', 'error');
       return;

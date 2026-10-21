@@ -369,6 +369,11 @@ export const updateMemberRole = async (
       throw new AppError(404, 'NOT_FOUND', 'Member not found in this group.');
     }
 
+    const callerRole = req.role ?? 'member';
+    if (callerRole !== 'owner') {
+      throw new AppError(403, 'FORBIDDEN_GROUP', 'Only the group owner can update member roles.');
+    }
+
     if (targetMembership.role === 'owner') {
       throw new AppError(400, 'VALIDATION', 'Cannot change the role of the group owner.');
     }
@@ -423,9 +428,14 @@ export const removeMember = async (
       throw new AppError(404, 'NOT_FOUND', 'Member not found in this group.');
     }
 
-    // Owner cannot leave
-    if (targetMembership.role === 'owner' && isSelf) {
-      throw new AppError(400, 'VALIDATION', 'Group owner cannot leave. Transfer ownership first.');
+    // Owner cannot leave or be removed
+    if (targetMembership.role === 'owner') {
+      throw new AppError(400, 'VALIDATION', isSelf ? 'Group owner cannot leave. Transfer ownership first.' : 'Cannot remove the group owner.');
+    }
+
+    // Only owner can remove an admin
+    if (!isSelf && targetMembership.role === 'admin' && callerRole !== 'owner') {
+      throw new AppError(403, 'FORBIDDEN_GROUP', 'Only the group owner can remove an admin.');
     }
 
     await targetMembership.deleteOne();

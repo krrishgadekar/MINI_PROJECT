@@ -14,6 +14,7 @@ import React, {
   useCallback,
   useRef,
 } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
 import type { AuthGroupEntry } from './AuthProvider';
 
@@ -88,15 +89,19 @@ export function GroupProvider({ groups, children }: GroupProviderProps) {
     };
   }, [activeGroupId]);
 
+  const queryClient = useQueryClient();
+
   const setActiveGroup = useCallback((groupId: string) => {
     setActiveGroupId(groupId);
     localStorage.setItem(STORAGE_KEY, groupId);
-  }, []);
+    queryClient.clear();
+  }, [queryClient]);
 
   const clearActiveGroup = useCallback(() => {
     setActiveGroupId(null);
     localStorage.removeItem(STORAGE_KEY);
-  }, []);
+    queryClient.clear();
+  }, [queryClient]);
 
   return (
     <GroupContext.Provider

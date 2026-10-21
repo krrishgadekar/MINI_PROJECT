@@ -11,11 +11,17 @@
     "build:server": "npm --prefix apps/server run build",
     "build:client": "npm --prefix client run build",
     "seed": "npm --prefix apps/server run seed",
+    "demo:reset": "npm --prefix apps/server run demo:reset",
+    "demo:race": "npm --prefix apps/server run demo:race",
+    "demo:screenshots": "npx ts-node -P tsconfig.json scripts/capture-screenshots.ts",
     "test": "npm --prefix apps/server run test",
     "test:server": "npm --prefix apps/server run test"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "@types/node": "^26.6.5",
     "jest": "^30.5.2",
-    "jest-cli": "^30.5.2"
+    "jest-cli": "^30.5.2",
+    "ts-node": "^10.9.2"
   }
 }

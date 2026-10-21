@@ -10,6 +10,7 @@ import { riskRouter } from './routes/risk.routes';
 import notificationRouter from './routes/notification.routes';
 import { groupsRouter } from './routes/groups.routes';
 import { auditRouter } from './routes/audit.routes';
+import { graphRouter } from './routes/graph.routes';
 import { errorHandler } from './middleware/errorHandler';
 import { getClientOrigins } from './config/cors';
 import { getDeepHealth } from './controllers/health.controller';
@@ -61,6 +62,7 @@ export const createApp = (): Application => {
   app.use('/api/notifications', notificationRouter);
   app.use('/api/groups', groupsRouter);
   app.use('/api/audit', auditRouter);
+  app.use('/api/graph', graphRouter);
 
   // ── Global error handler (must be last) ────────────────────────────────────
   app.use(errorHandler);

@@ -55,6 +55,9 @@ export default function Transaction() {
   // Dispute form state
   const [disputeReason, setDisputeReason] = useState('');
   const [isSubmittingDispute, setIsSubmittingDispute] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [isRejecting, setIsRejecting] = useState(false);
+  const [isSettling, setIsSettling] = useState(false);
 
   // Concurrency 409 simulation state
   const [mock409Active, setMock409Active] = useState(getSimulate409());
@@ -165,7 +168,8 @@ export default function Transaction() {
 
   // Actions
   const handleConfirm = async () => {
-    if (!debtId) return;
+    if (!debtId || isConfirming) return;
+    setIsConfirming(true);
     try {
       await api.debts.confirm(debtId);
       showToast('Debt proposal confirmed and activated!', 'success');
@@ -175,11 +179,14 @@ export default function Transaction() {
       if (!handleCasError(err)) {
         showToast(err.response?.data?.message || err.message || 'Error confirming debt', 'error');
       }
+    } finally {
+      setIsConfirming(false);
     }
   };
 
   const handleReject = async () => {
-    if (!debtId) return;
+    if (!debtId || isRejecting) return;
+    setIsRejecting(true);
     try {
       await api.debts.reject(debtId);
       showToast('Debt proposal rejected and cancelled.', 'info');
@@ -190,12 +197,14 @@ export default function Transaction() {
       if (!handleCasError(err)) {
         showToast(err.response?.data?.message || err.message || 'Error rejecting debt', 'error');
       }
+    } finally {
+      setIsRejecting(false);
     }
   };
 
   const handleDispute = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!debtId) return;
+    if (!debtId || isSubmittingDispute) return;
     setIsSubmittingDispute(true);
     try {
       await api.debts.dispute(debtId, { reason: disputeReason.trim() });
@@ -214,7 +223,8 @@ export default function Transaction() {
   };
 
   const handleSettle = async () => {
-    if (!debtId) return;
+    if (!debtId || isSettling) return;
+    setIsSettling(true);
     try {
       await api.debts.delete(debtId);
       showToast('Debt successfully settled in full.', 'success');
@@ -225,12 +235,14 @@ export default function Transaction() {
       if (!handleCasError(err)) {
         showToast(err.response?.data?.message || err.message || 'Error settling debt', 'error');
       }
+    } finally {
+      setIsSettling(false);
     }
   };
 
   const handleRecordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!debtId || !debt) return;
+    if (!debtId || !debt || isSubmittingPayment) return;
 
     const numAmount = parseFloat(paymentAmount);
     if (isNaN(numAmount) || numAmount <= 0) {

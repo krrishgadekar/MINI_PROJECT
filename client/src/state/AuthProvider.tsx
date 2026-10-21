@@ -99,6 +99,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     fetchMe();
   }, [fetchMe]);
 
+  // Handle mid-session token expiry event
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      setMerchant(null);
+      setGroups([]);
+    };
+    window.addEventListener('creditflow:auth-expired', handleAuthExpired);
+    return () => {
+      window.removeEventListener('creditflow:auth-expired', handleAuthExpired);
+    };
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{

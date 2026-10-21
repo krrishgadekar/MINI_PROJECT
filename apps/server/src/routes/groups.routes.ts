@@ -12,6 +12,19 @@ import {
 } from '../controllers/groups.controller';
 import { protect } from '../middleware/auth.middleware';
 import { requireGroup, requireRole } from '../middleware/group.middleware';
+import rateLimit from 'express-rate-limit';
+
+const joinLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: {
+    success: false,
+    code: 'RATE_LIMIT_EXCEEDED',
+    message: 'Too many join attempts. Please try again after 15 minutes.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 export const groupsRouter = Router();
 
@@ -21,8 +34,8 @@ groupsRouter.use(protect);
 // Routes that do NOT require existing group membership (no X-Group-Id)
 groupsRouter.post('/', createGroup);
 groupsRouter.get('/', listGroups);
-groupsRouter.post('/join', joinGroup);
-groupsRouter.post('/:id/join', joinGroup);
+groupsRouter.post('/join', joinLimiter, joinGroup);
+groupsRouter.post('/:id/join', joinLimiter, joinGroup);
 
 // Routes that DO require group membership (X-Group-Id header)
 groupsRouter.get(
@@ -53,7 +66,7 @@ groupsRouter.patch(
     next();
   },
   requireGroup,
-  requireRole('admin'),
+  requireRole('owner'),
   updateMemberRole,
 );
 

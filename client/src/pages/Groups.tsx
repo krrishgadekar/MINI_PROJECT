@@ -60,6 +60,8 @@ export default function Groups() {
   const [joining, setJoining] = useState<boolean>(false);
 
   const [rotatingId, setRotatingId] = useState<string | null>(null);
+  const [updatingMid, setUpdatingMid] = useState<string | null>(null);
+  const [removingMid, setRemovingMid] = useState<string | null>(null);
 
   // Fetch all groups
   const loadGroups = useCallback(async () => {
@@ -137,6 +139,7 @@ export default function Groups() {
   // Create Group
   const handleCreateGroup = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (creating) return;
     if (!newGroupName.trim()) {
       toast.warning('Group name is required');
       return;
@@ -164,6 +167,7 @@ export default function Groups() {
   // Join Group
   const handleJoinGroup = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (joining) return;
     if (!inviteCodeInput.trim()) {
       toast.warning('Invite code is required');
       return;
@@ -188,30 +192,36 @@ export default function Groups() {
 
   // Update Member Role
   const handleUpdateRole = async (member: EnrichedMembership, newRole: Role) => {
-    if (!selectedGroup) return;
+    if (!selectedGroup || updatingMid) return;
     try {
+      setUpdatingMid(member.merchantId);
       await api.groups.updateRole(selectedGroup._id, member.merchantId, newRole);
       toast.success(`Role for ${member.merchant?.name || member.merchantId} updated to ${newRole}`);
       await loadMembers(selectedGroup._id);
     } catch (err: any) {
       toast.error('Failed to update role: ' + err.message);
+    } finally {
+      setUpdatingMid(null);
     }
   };
 
   // Remove Member
   const handleRemoveMember = async (member: EnrichedMembership) => {
-    if (!selectedGroup) return;
+    if (!selectedGroup || removingMid) return;
     const confirm = window.confirm(
       `Are you sure you want to remove ${member.merchant?.name || member.merchantId} from ${selectedGroup.name}?`,
     );
     if (!confirm) return;
 
     try {
+      setRemovingMid(member.merchantId);
       await api.groups.removeMember(selectedGroup._id, member.merchantId);
       toast.info(`Removed member from group`);
       await loadMembers(selectedGroup._id);
     } catch (err: any) {
       toast.error('Failed to remove member: ' + err.message);
+    } finally {
+      setRemovingMid(null);
     }
   };
 

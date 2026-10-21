@@ -17,7 +17,7 @@ const PaymentSchema = new Schema<IPayment>(
   {
     groupId: { type: Schema.Types.ObjectId, ref: 'Group', required: true, index: true },
     debtId: { type: Schema.Types.ObjectId, ref: 'Debt', required: true, index: true },
-    amount: { type: Number, required: true, min: 0 },
+    amount: { type: Number, required: true, min: [0.01, 'Payment amount must be greater than zero'] },
     kind: {
       type: String,
       enum: ['partial', 'settlement', 'netting'],

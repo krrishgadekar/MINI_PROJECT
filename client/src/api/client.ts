@@ -66,11 +66,24 @@ apiClient.interceptors.response.use(
         return Promise.reject(error);
       }
 
-      const refreshToken = localStorage.getItem("creditflow_refresh_token");
-      if (!refreshToken) {
+      const notifyAuthExpired = () => {
         localStorage.removeItem("creditflow_token");
         localStorage.removeItem("creditflow_refresh_token");
         localStorage.removeItem("creditflow_active_group");
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("creditflow:auth-expired"));
+          if (
+            !window.location.pathname.includes("/login") &&
+            !window.location.pathname.includes("/register")
+          ) {
+            window.location.href = "/login?expired=true";
+          }
+        }
+      };
+
+      const refreshToken = localStorage.getItem("creditflow_refresh_token");
+      if (!refreshToken) {
+        notifyAuthExpired();
         return Promise.reject(error);
       }
 
@@ -103,9 +116,7 @@ apiClient.interceptors.response.use(
         return apiClient(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);
-        localStorage.removeItem("creditflow_token");
-        localStorage.removeItem("creditflow_refresh_token");
-        localStorage.removeItem("creditflow_active_group");
+        notifyAuthExpired();
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;

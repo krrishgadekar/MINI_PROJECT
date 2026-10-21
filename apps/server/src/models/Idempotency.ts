@@ -19,7 +19,7 @@ const IdempotencyRecordSchema = new Schema<IIdempotencyRecord>(
   },
 );
 
-IdempotencyRecordSchema.index({ debtId: 1, key: 1 }, { unique: true });
+IdempotencyRecordSchema.index({ key: 1 }, { unique: true });
 
 export const IdempotencyRecord = model<IIdempotencyRecord>(
   'IdempotencyRecord',

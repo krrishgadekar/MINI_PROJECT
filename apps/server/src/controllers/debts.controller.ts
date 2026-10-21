@@ -601,11 +601,17 @@ export const recordPayment = async (
     // Idempotency check (BE-25)
     if (idempotencyKey) {
       const existing = await IdempotencyRecord.findOne({
-        debtId: debtObjectId,
         key: idempotencyKey,
       });
 
       if (existing) {
+        if (existing.debtId.toString() !== debtObjectId.toString()) {
+          throw new AppError(
+            409,
+            'IDEMPOTENCY_CONFLICT',
+            'Idempotency key has already been used for a different debt.',
+          );
+        }
         res.status(200).json({
           ...existing.response,
           code: 'IDEMPOTENT_REPLAY',
@@ -775,6 +781,20 @@ export const updateDebt = async (
       return next(new AppError(403, 'FORBIDDEN_GROUP', 'Debt does not belong to this group.'));
     }
 
+    // Role / party permission check
+    const role = req.role ?? 'member';
+    const callerId = req.merchant!._id.toString();
+    const debtorId = debt.debtorId?.toString();
+    const creditorId = debt.creditorId?.toString();
+    const isParty = callerId === debtorId || callerId === creditorId;
+    const isAdmin = role === 'admin' || role === 'owner';
+
+    if (!isParty && !isAdmin) {
+      return next(
+        new AppError(403, 'FORBIDDEN_GROUP', 'Only transaction parties and admins can update this debt.'),
+      );
+    }
+
     if (debt.status !== 'active' && debt.status !== 'pending') {
       res.status(400).json({ message: 'Cannot update a settled or netted debt.' });
       return;
@@ -827,6 +847,20 @@ export const settleDebt = async (
     // Tenant isolation check
     if (req.groupId && debt.groupId?.toString() !== req.groupId) {
       return next(new AppError(403, 'FORBIDDEN_GROUP', 'Debt does not belong to this group.'));
+    }
+
+    // Role / party permission check
+    const settleRole = req.role ?? 'member';
+    const settleCallerId = req.merchant!._id.toString();
+    const settleDebtorId = debt.debtorId?.toString();
+    const settleCreditorId = debt.creditorId?.toString();
+    const settleIsParty = settleCallerId === settleDebtorId || settleCallerId === settleCreditorId;
+    const settleIsAdmin = settleRole === 'admin' || settleRole === 'owner';
+
+    if (!settleIsParty && !settleIsAdmin) {
+      return next(
+        new AppError(403, 'FORBIDDEN_GROUP', 'Only transaction parties and admins can settle this debt.'),
+      );
     }
 
     const ifMatch = req.headers['if-match'];
@@ -956,7 +990,10 @@ export const exportDebtsCsv = async (
     res.setHeader('Content-Disposition', 'attachment; filename="debts_export.csv"');
 
     const escapeCsv = (val: any): string => {
-      const str = String(val ?? '');
+      let str = String(val ?? '');
+      if (/^[=+@\-\t\r]/.test(str)) {
+        str = `'${str}`;
+      }
       if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
         return `"${str.replace(/"/g, '""')}"`;
       }
@@ -1044,9 +1081,29 @@ export const importDebtsCsv = async (
       return;
     }
 
+    // Protection against oversized files (>2MB)
+    if (csvContent.length > 2 * 1024 * 1024) {
+      res.status(400).json({
+        success: false,
+        code: 'FILE_TOO_LARGE',
+        message: 'CSV file size exceeds the 2MB limit.',
+      });
+      return;
+    }
+
     const { rows } = parseCsv(csvContent);
     if (rows.length === 0) {
       res.status(400).json({ success: false, message: 'CSV contains no data rows.' });
+      return;
+    }
+
+    // Protection against excessive rows DoS (>1000 rows)
+    if (rows.length > 1000) {
+      res.status(400).json({
+        success: false,
+        code: 'TOO_MANY_ROWS',
+        message: 'CSV exceeds maximum limit of 1000 rows per import.',
+      });
       return;
     }
 
@@ -1143,12 +1200,13 @@ export const importDebtsCsv = async (
         }
 
         if (rowErrors.length === 0 && resolvedDebtorId && resolvedCreditorId) {
+          const sanitizedNote = note ? (/^[=+@\-\t\r]/.test(note) ? `'${note}` : note) : '';
           validRows.push({
             debtorId: resolvedDebtorId,
             creditorId: resolvedCreditorId,
             amount,
             dueDate: parsedDueDate,
-            note: note || '',
+            note: sanitizedNote,
             debtorIdentifier: debtor,
             creditorIdentifier: creditor,
           });

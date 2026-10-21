@@ -1,0 +1,84 @@
+services:
+  mongo:
+    image: mongo:7.0
+    container_name: creditflow-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  engine:
+    build:
+      context: .
+      dockerfile: creditflow/Dockerfile
+    container_name: creditflow-engine
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  server:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    container_name: creditflow-server
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - PORT=4000
+      - MONGO_URI=${MONGO_URI:-mongodb://mongo:27017/creditflow}
+      - PYTHON_ENGINE_URL=${PYTHON_ENGINE_URL:-http://engine:8000}
+      - AUTO_SEED=${AUTO_SEED:-true}
+    depends_on:
+      mongo:
+        condition: service_healthy
+      engine:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:4000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  client:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+      args:
+        - VITE_API_BASE_URL=http://localhost:4000/api
+        - VITE_WS_URL=http://localhost:4000
+        - VITE_MOCK_DOMAINS=
+    container_name: creditflow-client
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  mongo_data:
+    driver: local

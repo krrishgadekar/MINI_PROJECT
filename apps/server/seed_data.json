@@ -1,0 +1,65 @@
+{
+  "scenario_name": "Crawford Market Vendors",
+  "description": "A realistic dataset of 8 merchants forming a complex web of informal debts, including cycles and isolated chains.",
+  "merchants": [
+    "Wholesale_A",
+    "Retailer_B",
+    "Supplier_C",
+    "Vendor_D",
+    "Logistics_E",
+    "Farmer_F",
+    "Stall_G",
+    "Buyer_H"
+  ],
+  "debts": [
+    { "debtor": "Retailer_B", "creditor": "Wholesale_A", "amount": 50000 },
+    { "debtor": "Vendor_D", "creditor": "Retailer_B", "amount": 25000 },
+    { "debtor": "Wholesale_A", "creditor": "Vendor_D", "amount": 20000 },
+    
+    { "debtor": "Supplier_C", "creditor": "Wholesale_A", "amount": 10000 },
+    { "debtor": "Logistics_E", "creditor": "Supplier_C", "amount": 15000 },
+    { "debtor": "Supplier_C", "creditor": "Logistics_E", "amount": 15000 },
+    
+    { "debtor": "Stall_G", "creditor": "Farmer_F", "amount": 5000 },
+    { "debtor": "Buyer_H", "creditor": "Stall_G", "amount": 4000 },
+    { "debtor": "Farmer_F", "creditor": "Buyer_H", "amount": 4500 }
+  ],
+  "risk_histories": [
+    {
+      "merchant_id": "Wholesale_A",
+      "history": [
+        {"late": false, "default": false},
+        {"late": false, "default": false},
+        {"late": false, "default": false},
+        {"late": false, "default": false},
+        {"late": false, "default": false},
+        {"late": false, "default": false},
+        {"late": false, "default": false},
+        {"late": false, "default": false},
+        {"late": false, "default": false},
+        {"late": false, "default": false},
+        {"late": false, "default": false},
+        {"late": false, "default": false}
+      ]
+    },
+    {
+      "merchant_id": "Vendor_D",
+      "history": [
+        {"late": true, "default": false},
+        {"late": true, "default": false},
+        {"late": false, "default": false},
+        {"late": false, "default": false},
+        {"late": true, "default": false},
+        {"late": false, "default": false}
+      ]
+    },
+    {
+      "merchant_id": "Supplier_C",
+      "history": [
+        {"late": true, "default": true},
+        {"late": true, "default": false},
+        {"late": true, "default": false}
+      ]
+    }
+  ]
+}

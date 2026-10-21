@@ -10,6 +10,17 @@ const start = async (): Promise<void> => {
   // 1. Connect to MongoDB
   await connectDB();
 
+  // 1b. Auto-seed if database is empty and AUTO_SEED is enabled
+  if (process.env.AUTO_SEED === 'true') {
+    const { Merchant } = await import('./models/Merchant');
+    const merchantCount = await Merchant.countDocuments();
+    if (merchantCount === 0) {
+      console.log('🌱 Database is empty and AUTO_SEED=true: running demo seed...');
+      const { seedDatabase } = await import('./services/seedService');
+      await seedDatabase({ silent: false, disconnectOnFinish: false });
+    }
+  }
+
   // 2. Create Express app
   const app = createApp();
 

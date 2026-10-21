@@ -1,0 +1,12 @@
+**/.git
+**/.github
+**/.venv
+**/node_modules
+**/dist
+**/.pytest_cache
+**/__pycache__
+**/*.pyc
+**/.mongo-data
+**/*.log
+**/.DS_Store
+Thumbs.db

@@ -422,12 +422,48 @@ export default function Ledger() {
             ))}
           </div>
         ) : error ? (
-          <div style={{ padding: 40, textAlign: 'center', color: 'var(--danger)' }}>
-            <AlertTriangle size={32} style={{ marginBottom: 10 }} />
-            <p>Failed to load debts: {(error as any)?.message || 'Unknown error'}</p>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => refetch()} style={{ marginTop: 12 }}>
-              Retry
-            </button>
+          (error as any)?.response?.status === 403 || (error as any)?.code === 'FORBIDDEN_GROUP' ? (
+            <div style={{ padding: 48, textAlign: 'center' }}>
+              <EmptyState
+                title="Access Denied"
+                description="You do not have permission to view or manage debts in this group."
+                action={
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => navigate('/groups')}
+                    style={{ marginTop: 12 }}
+                  >
+                    Switch Group
+                  </button>
+                }
+              />
+            </div>
+          ) : (
+            <div style={{ padding: 40, textAlign: 'center', color: 'var(--danger)' }}>
+              <AlertTriangle size={32} style={{ marginBottom: 10 }} />
+              <p>Failed to load debts: {(error as any)?.message || 'Unknown error'}</p>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => refetch()} style={{ marginTop: 12 }}>
+                Retry
+              </button>
+            </div>
+          )
+        ) : !activeGroupId ? (
+          <div style={{ padding: 48 }}>
+            <EmptyState
+              title="No Active Group Selected"
+              description="Please select or join a trade group to view debts."
+              action={
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => navigate('/groups')}
+                  style={{ marginTop: 12 }}
+                >
+                  Go to Groups
+                </button>
+              }
+            />
           </div>
         ) : debts.length === 0 ? (
           <div style={{ padding: 48 }}>

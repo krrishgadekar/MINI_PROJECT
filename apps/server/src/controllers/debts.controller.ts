@@ -255,6 +255,15 @@ export const createDebt = async (
       return;
     }
 
+    if (debtor._id.toString() === creditor._id.toString()) {
+      res.status(400).json({
+        success: false,
+        code: 'VALIDATION',
+        message: 'A merchant cannot owe themselves (self-loop not permitted).',
+      });
+      return;
+    }
+
     // Both parties must be members of the group (if groupId is present)
     if (groupId) {
       const groupObjId = new mongoose.Types.ObjectId(groupId);

@@ -20,7 +20,7 @@ export const runDueDateJob = async (): Promise<DueDateJobSummary> => {
 
   // Find all active debts that have a dueDate
   const activeDebts = await Debt.find({
-    status: { $in: ['active', 'pending'] },
+    status: 'active',
     dueDate: { $exists: true, $ne: null },
   }).populate('debtorId creditorId');
 

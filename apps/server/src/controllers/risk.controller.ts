@@ -90,15 +90,29 @@ export const getGroupRisk = async (
 ): Promise<void> => {
   try {
     const groupId = req.groupId || (req.query.groupId as string);
-    const filter: any = {};
-    if (groupId) {
-      filter.groupId = groupId;
+    if (!groupId) {
+      throw new AppError(400, 'VALIDATION', 'Active group context is required.');
     }
 
-    const assessments = await RiskAssessment.find(filter)
-      .sort({ riskScore: -1 })
+    const filter: any = { groupId };
+
+    const rawAssessments = await RiskAssessment.find(filter)
+      .sort({ computedAt: -1, createdAt: -1 })
       .populate('merchantId', 'name email riskProfile')
       .lean();
+
+    // Deduplicate assessments to retain only the latest record per merchant
+    const seenMerchants = new Set<string>();
+    const assessments: any[] = [];
+    for (const a of rawAssessments) {
+      const mId = a.merchantId?._id?.toString() || a.merchantId?.toString();
+      if (!mId || seenMerchants.has(mId)) continue;
+      seenMerchants.add(mId);
+      assessments.push(a);
+    }
+
+    // Sort by riskScore descending for portfolio ranking
+    assessments.sort((a, b) => (b.riskScore || 0) - (a.riskScore || 0));
 
     const avgRisk =
       assessments.length > 0
@@ -148,11 +162,28 @@ export const getMerchantRisk = async (
       throw new AppError(404, 'NOT_FOUND', 'Merchant not found.');
     }
 
-    const latestAssessment = await RiskAssessment.findOne({ merchantId: id })
+    if (req.groupId) {
+      const isMember = await Membership.exists({
+        groupId: new Types.ObjectId(req.groupId),
+        merchantId: new Types.ObjectId(id),
+      });
+      if (!isMember) {
+        throw new AppError(403, 'FORBIDDEN_GROUP', 'Merchant is not an active member of this group.');
+      }
+    }
+
+    const groupAssessmentFilter: any = { merchantId: new Types.ObjectId(id) };
+    const groupEventFilter: any = { merchantId: new Types.ObjectId(id) };
+    if (req.groupId) {
+      groupAssessmentFilter.groupId = req.groupId;
+      groupEventFilter.groupId = new Types.ObjectId(req.groupId);
+    }
+
+    const latestAssessment = await RiskAssessment.findOne(groupAssessmentFilter)
       .sort({ createdAt: -1 })
       .lean();
 
-    const paymentEvents = await PaymentEvent.find({ merchantId: id })
+    const paymentEvents = await PaymentEvent.find(groupEventFilter)
       .sort({ dueDate: -1 })
       .lean();
 
@@ -201,11 +232,41 @@ export const recomputeGroupRisk = async (
   next: NextFunction,
 ): Promise<void> => {
   try {
-    const groupId = req.groupId || 'default';
+    const groupId = req.groupId;
+    if (!groupId) {
+      throw new AppError(400, 'VALIDATION', 'Active group context is required.');
+    }
 
-    // Fetch all merchants and group payment events
-    const merchants = await Merchant.find().lean();
-    const groupEvents = await PaymentEvent.find().lean();
+    // Role check: Only admin or owner can trigger group risk recomputation
+    if (req.role && req.role !== 'admin' && req.role !== 'owner') {
+      throw new AppError(403, 'FORBIDDEN_GROUP', 'Only group admins and owners can recompute group risk.');
+    }
+
+    // Fetch ONLY merchants who are active members of this tenant group
+    const memberships = await Membership.find({
+      groupId: new Types.ObjectId(groupId),
+    })
+      .populate('merchantId')
+      .lean();
+
+    const merchants = memberships
+      .map((m: any) => m.merchantId)
+      .filter((m: any) => m && m._id);
+
+    if (merchants.length === 0) {
+      res.json({
+        success: true,
+        recomputedCount: 0,
+        baselineLateRate: 0.05,
+        correlation: 0,
+      });
+      return;
+    }
+
+    // Fetch ONLY group payment events
+    const groupEvents = await PaymentEvent.find({
+      groupId: new Types.ObjectId(groupId),
+    }).lean();
 
     // Baseline calculation: group-wide late payment rate
     const totalGroupEvents = groupEvents.length;
@@ -370,16 +431,72 @@ export const simulateContagion = async (
   next: NextFunction,
 ): Promise<void> => {
   try {
-    const { failedMerchant, lossGivenDefault, maxRounds } = req.body;
-    if (!failedMerchant) {
+    const { failedMerchant, merchantId, lossGivenDefault, maxRounds } = req.body;
+    const targetIdentifier = failedMerchant || merchantId;
+    if (!targetIdentifier) {
       throw new AppError(400, 'VALIDATION', 'Missing failedMerchant parameter.');
     }
 
-    const merchants = await Merchant.find().lean();
-    const merchantNames = merchants.map((m) => m.name);
+    const groupId = req.groupId;
+    if (!groupId) {
+      throw new AppError(400, 'VALIDATION', 'Active group context is required.');
+    }
 
-    // Build active debts from MongoDB
-    const debts = await Debt.find({ status: 'active' })
+    // Input bounds validation
+    if (lossGivenDefault !== undefined) {
+      const lgd = Number(lossGivenDefault);
+      if (isNaN(lgd) || lgd < 0 || lgd > 1) {
+        throw new AppError(400, 'VALIDATION', 'lossGivenDefault must be a number between 0.0 and 1.0.');
+      }
+    }
+
+    if (maxRounds !== undefined) {
+      const mr = Number(maxRounds);
+      if (isNaN(mr) || mr < 1 || mr > 20) {
+        throw new AppError(400, 'VALIDATION', 'maxRounds must be an integer between 1 and 20.');
+      }
+    }
+
+    // Fetch active merchants strictly belonging to this group
+    const memberships = await Membership.find({
+      groupId: new Types.ObjectId(groupId),
+    })
+      .populate('merchantId')
+      .lean();
+
+    const groupMerchants = memberships
+      .map((m: any) => m.merchantId)
+      .filter((m: any) => m && m._id);
+
+    const merchantNames = groupMerchants.map((m: any) => m.name);
+
+    // Resolve failed merchant name within this group
+    let resolvedFailedMerchantName: string | null = null;
+    if (Types.ObjectId.isValid(targetIdentifier)) {
+      const match = groupMerchants.find(
+        (m: any) => m._id.toString() === targetIdentifier.toString(),
+      );
+      if (match) resolvedFailedMerchantName = match.name;
+    } else {
+      const match = groupMerchants.find(
+        (m: any) => m.name.toLowerCase() === targetIdentifier.toLowerCase(),
+      );
+      if (match) resolvedFailedMerchantName = match.name;
+    }
+
+    if (!resolvedFailedMerchantName) {
+      throw new AppError(
+        400,
+        'VALIDATION',
+        `Failed merchant '${targetIdentifier}' is not an active member of this group.`,
+      );
+    }
+
+    // Build active debts strictly from THIS group
+    const debts = await Debt.find({
+      groupId: new Types.ObjectId(groupId),
+      status: 'active',
+    })
       .populate('debtorId creditorId')
       .lean();
 
@@ -394,7 +511,7 @@ export const simulateContagion = async (
     const result = await callContagion(
       merchantNames,
       formattedDebts,
-      failedMerchant,
+      resolvedFailedMerchantName,
       lossGivenDefault ?? 1.0,
       maxRounds ?? 5,
     );
@@ -402,6 +519,7 @@ export const simulateContagion = async (
     res.json({
       success: true,
       simulation: result,
+      contagion: result,
     });
   } catch (error) {
     next(error);
@@ -536,6 +654,34 @@ export const getRiskTrend = async (
     if (!Types.ObjectId.isValid(merchantId)) {
       res.status(400).json({ success: false, message: 'Invalid merchant ID format.' });
       return;
+    }
+
+    const callerMerchantId = req.merchant?.id || (req as any).user?.id;
+    if (callerMerchantId && callerMerchantId.toString() !== merchantId.toString()) {
+      const callerMemberships = await Membership.find({
+        merchantId: new Types.ObjectId(callerMerchantId),
+      }).select('groupId');
+      const callerGroupIds = callerMemberships.map((m) => m.groupId);
+
+      const targetHasMemberships = await Membership.exists({
+        merchantId: new Types.ObjectId(merchantId),
+      });
+
+      if (callerGroupIds.length > 0 || targetHasMemberships) {
+        const sharesGroup = await Membership.exists({
+          merchantId: new Types.ObjectId(merchantId),
+          groupId: { $in: callerGroupIds },
+        });
+
+        if (!sharesGroup) {
+          res.status(403).json({
+            success: false,
+            code: 'FORBIDDEN_GROUP',
+            message: 'Access denied: You do not share an active group with this merchant.',
+          });
+          return;
+        }
+      }
     }
 
     const events = await PaymentEvent.find({ merchantId: new Types.ObjectId(merchantId) })

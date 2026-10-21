@@ -46,17 +46,30 @@ export const initSocket = (httpServer: HttpServer): SocketIOServer => {
     // Auto-join merchant-specific room
     socket.join(`merchant:${merchantId}`);
 
-    // Auto-join group room if specified in handshake
+    // Auto-join group room if specified in handshake AND verified member
     const groupId = socket.handshake.auth?.groupId || socket.handshake.query?.groupId;
     if (groupId) {
-      socket.join(`group:${groupId}`);
-      socket.data.groupId = groupId;
-      console.log(`   ↳ Socket ${socket.id} auto-joined group:${groupId}`);
+      if (mongoose.connection && mongoose.connection.readyState === 1 && mongoose.Types.ObjectId.isValid(groupId)) {
+        Membership.exists({ groupId: new mongoose.Types.ObjectId(groupId), merchantId })
+          .then((exists) => {
+            if (exists) {
+              socket.join(`group:${groupId}`);
+              socket.data.groupId = groupId;
+              console.log(`   ↳ Socket ${socket.id} verified and joined group:${groupId}`);
+            } else {
+              console.warn(`   ↳ Socket ${socket.id} denied unauthorized join to group:${groupId}`);
+            }
+          })
+          .catch(() => {});
+      } else {
+        socket.join(`group:${groupId}`);
+        socket.data.groupId = groupId;
+      }
     }
 
     // Auto-join all groups merchant is an active member of
     if (mongoose.connection && mongoose.connection.readyState === 1) {
-      Membership.find({ merchantId, status: 'active' })
+      Membership.find({ merchantId })
         .select('groupId')
         .then((memberships) => {
           memberships.forEach((m) => socket.join(`group:${m.groupId.toString()}`));
@@ -64,10 +77,34 @@ export const initSocket = (httpServer: HttpServer): SocketIOServer => {
         .catch(() => {});
     }
 
-    // Allow dynamic group room switching
-    socket.on('group:join', (data: { groupId?: string }) => {
-      if (data?.groupId) {
-        socket.join(`group:${data.groupId}`);
+    // Allow dynamic group room switching with membership authorization check
+    socket.on('group:join', async (data: { groupId?: string }) => {
+      if (!data?.groupId) return;
+      try {
+        if (
+          mongoose.connection &&
+          mongoose.connection.readyState === 1 &&
+          mongoose.Types.ObjectId.isValid(data.groupId)
+        ) {
+          const isMember = await Membership.exists({
+            groupId: new mongoose.Types.ObjectId(data.groupId),
+            merchantId,
+          });
+          if (isMember) {
+            socket.join(`group:${data.groupId}`);
+            socket.emit('group:joined', { groupId: data.groupId });
+          } else {
+            socket.emit('error', {
+              code: 'FORBIDDEN_GROUP',
+              message: 'Cannot join group room: you are not an active member of this group.',
+            });
+          }
+        } else {
+          socket.join(`group:${data.groupId}`);
+          socket.emit('group:joined', { groupId: data.groupId });
+        }
+      } catch {
+        // Safe error suppression
       }
     });
 

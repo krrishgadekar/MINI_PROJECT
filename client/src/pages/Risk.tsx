@@ -7,6 +7,7 @@ import {
   useMerchantRisk,
   useRiskTrend,
 } from "../hooks/useRisk";
+import { useGroup } from "../state/GroupProvider";
 import RiskBadge from "../components/RiskBadge";
 import { Drawer, Skeleton, EmptyState, Badge } from "../components/ui";
 import { useToast } from "../components/ui/Toast";
@@ -53,9 +54,13 @@ const SEVERITY_CHIPS: { label: string; value: SeverityFilter; color: string }[] 
 export default function Risk() {
   const navigate = useNavigate();
   const { success, error } = useToast();
+  const { activeGroup, activeGroupId } = useGroup();
   const { data: riskData, isLoading, refetch } = useGroupRisk();
   const recomputeMutation = useRecomputeRisk();
   const contagionMutation = useSimulateContagion();
+
+  const role = activeGroup?.role ?? "member";
+  const isAdmin = role === "admin" || role === "owner";
 
   const [search, setSearch] = useState("");
   const [sortField, setSortField] = useState<SortField>("score");
@@ -117,6 +122,10 @@ export default function Risk() {
   };
 
   const handleRecompute = () => {
+    if (!isAdmin) {
+      error("Only group admins and owners can recompute group risk.");
+      return;
+    }
     recomputeMutation.mutate(undefined, {
       onSuccess: () => {
         success("Risk scores and hypothesis tests recomputed successfully!");
@@ -152,6 +161,23 @@ export default function Risk() {
     }, {} as Record<string, number>);
   }, [profiles]);
 
+  if (!activeGroupId) {
+    return (
+      <div className="page-container" style={{ padding: "var(--content-padding)" }}>
+        <EmptyState
+          icon={<ShieldAlert size={36} color="var(--accent-primary)" />}
+          title="No Active Group Selected"
+          description="Please select or join a trade credit group to inspect portfolio risk metrics and simulate contagion."
+          action={
+            <button className="btn btn--primary" onClick={() => navigate("/groups")}>
+              Go to Groups
+            </button>
+          }
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="animate-fade-in" style={{ padding: "var(--content-padding)" }}>
       {/* Page Header */}
@@ -178,10 +204,17 @@ export default function Risk() {
           </button>
           <button
             onClick={handleRecompute}
-            disabled={recomputeMutation.isPending}
+            disabled={recomputeMutation.isPending || !isAdmin}
             className="btn btn--primary"
+            title={!isAdmin ? "Only group admins or owners can recompute group risk" : "Recompute all risk scores"}
             aria-label="Recompute all risk scores"
-            style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              opacity: !isAdmin ? 0.6 : 1,
+              cursor: !isAdmin ? "not-allowed" : "pointer",
+            }}
           >
             <Activity size={16} aria-hidden="true" />
             {recomputeMutation.isPending ? "Computing..." : "Recompute Risk"}

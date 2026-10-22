@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useDebts } from '../hooks/useDebts';
 import { useGroupRisk } from '../hooks/useRisk';
 import { useNotifications } from '../hooks/useNotifications';
-import { Badge } from '../components/ui';
+
 import {
   CreditCard,
   TrendingUp,
@@ -55,13 +55,13 @@ function DragHandle() {
         display: 'flex',
         alignItems: 'center',
         padding: '0 4px',
-        opacity: 0.5,
+        opacity: 0.6,
         transition: 'opacity var(--transition-fast)',
       }}
       onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-      onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.5')}
+      onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.6')}
     >
-      <GripVertical size={16} aria-hidden="true" />
+      <GripVertical size={15} aria-hidden="true" />
     </div>
   );
 }
@@ -114,9 +114,9 @@ export default function Overview() {
       else buckets['Low Risk (<0.33)'] += d.amount;
     });
     return [
-      { name: 'Low Risk', value: buckets['Low Risk (<0.33)'] || 12000, color: 'var(--teal)' },
-      { name: 'Medium Risk', value: buckets['Medium Risk (0.33-0.66)'] || 18000, color: 'var(--accent-light)' },
-      { name: 'Elevated Risk', value: buckets['Elevated Risk (>0.66)'] || 8500, color: 'var(--risk-critical)' },
+      { name: 'Low Risk', value: buckets['Low Risk (<0.33)'] || 12000, color: '#1e6b4b' },
+      { name: 'Medium Risk', value: buckets['Medium Risk (0.33-0.66)'] || 18000, color: '#c27814' },
+      { name: 'Elevated Risk', value: buckets['Elevated Risk (>0.66)'] || 8500, color: '#c8502a' },
     ];
   }, [activeDebts]);
 
@@ -160,35 +160,50 @@ export default function Overview() {
             onDragOver={(e) => handleDragOver(e, 'exposure')}
             onDrop={handleDrop}
             className="card"
-            style={{ padding: 20 }}
+            style={{
+              padding: 22,
+              background: '#ffffff',
+              border: '1px solid #dcd5cb',
+              borderRadius: 4,
+              boxShadow: '0 1px 3px rgba(13, 24, 41, 0.04)',
+            }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <DragHandle />
-              <h3 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700 }}>Risk-Weighted Exposure</h3>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <DragHandle />
+                <div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: '#c8502a', fontWeight: 700 }}>
+                    [RADAR // 01]
+                  </div>
+                  <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.05rem', fontWeight: 700, color: '#0d2247' }}>
+                    Risk-Weighted Exposure
+                  </h3>
+                </div>
+              </div>
             </div>
-            <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', marginBottom: 14 }}>
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: 14 }}>
               Distribution of active obligation balances by assessed risk tier.
             </p>
-            <div style={{ height: 190 }}>
+            <div style={{ height: 180 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={exposureData} cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={4} dataKey="value">
+                  <Pie data={exposureData} cx="50%" cy="50%" innerRadius={48} outerRadius={72} paddingAngle={4} dataKey="value">
                     {exposureData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <RechartsTooltip formatter={(val: any) => `₹${Number(val).toLocaleString()}`} />
+                  <RechartsTooltip formatter={(val: any) => `₹${Number(val).toLocaleString('en-IN')}`} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10, fontSize: 'var(--font-size-xs)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12, fontSize: '0.78rem' }}>
               {exposureData.map((item) => (
                 <div key={item.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: item.color }} aria-hidden="true" />
-                    <span style={{ color: 'var(--text-secondary)' }}>{item.name}</span>
+                    <div style={{ width: 8, height: 8, background: item.color, borderRadius: 1 }} aria-hidden="true" />
+                    <span style={{ color: '#424d5d', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>{item.name}</span>
                   </div>
-                  <span style={{ fontWeight: 600 }}>₹{item.value.toLocaleString()}</span>
+                  <span style={{ fontWeight: 700, fontFamily: 'var(--font-mono)' }}>₹{item.value.toLocaleString('en-IN')}</span>
                 </div>
               ))}
             </div>
@@ -204,62 +219,111 @@ export default function Overview() {
             onDragOver={(e) => handleDragOver(e, 'due-soon')}
             onDrop={handleDrop}
             className="card"
-            style={{ padding: 20 }}
+            style={{
+              padding: 22,
+              background: '#ffffff',
+              border: '1px solid #dcd5cb',
+              borderRadius: 4,
+              boxShadow: '0 1px 3px rgba(13, 24, 41, 0.04)',
+            }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <DragHandle />
                 <div>
-                  <h3 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700 }}>Upcoming Maturing Obligations</h3>
-                  <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: '#c8502a', fontWeight: 700 }}>
+                    [TIMELINE // 02]
+                  </div>
+                  <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.05rem', fontWeight: 700, color: '#0d2247' }}>
+                    Upcoming Maturing Obligations
+                  </h3>
+                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
                     Debts with contractual due dates in the next 7 business days
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => navigate('/ledger')}
-                className="btn btn--secondary"
-                aria-label="View all debts in ledger"
-                style={{ fontSize: 'var(--font-size-xs)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                style={{
+                  background: '#ffffff',
+                  border: '1px solid #dcd5cb',
+                  color: '#0d2247',
+                  padding: '5px 10px',
+                  borderRadius: 2,
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.72rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
               >
-                All Debts <ArrowRight size={12} aria-hidden="true" />
+                ALL DEBTS <ArrowRight size={11} aria-hidden="true" />
               </button>
             </div>
             {dueSoonDebts.length === 0 ? (
-              <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--font-size-sm)' }}>
-                No obligations due within the next 7 days.
+              <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
+                No obligations maturing within the next 7 days.
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {dueSoonDebts.slice(0, 5).map((debt: any) => (
                   <div
                     key={debt._id}
                     onClick={() => navigate(`/ledger/${debt._id}`)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') navigate(`/ledger/${debt._id}`); }}
-                    tabIndex={0}
-                    role="button"
-                    aria-label={`View debt ₹${debt.amount.toLocaleString()} due ${debt.dueDate ? new Date(debt.dueDate).toLocaleDateString() : 'soon'}`}
                     style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      padding: 12, background: 'var(--bg-elevated)', borderRadius: 8, cursor: 'pointer',
-                      transition: 'all var(--transition-fast)', border: '1px solid var(--border-primary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '10px 14px',
+                      background: '#faf8f4',
+                      borderRadius: 2,
+                      cursor: 'pointer',
+                      border: '1px solid #e8e2d8',
+                      transition: 'all 0.15s ease',
                     }}
-                    className="table-row-hover"
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <CreditCard size={18} color="var(--teal)" aria-hidden="true" />
+                      <div
+                        style={{
+                          width: 24,
+                          height: 24,
+                          background: '#0d2247',
+                          color: '#ffffff',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          borderRadius: 2,
+                        }}
+                      >
+                        <CreditCard size={12} aria-hidden="true" />
+                      </div>
                       <div>
-                        <div style={{ fontWeight: 600, fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>
-                          ₹{debt.amount.toLocaleString()}
+                        <div style={{ fontWeight: 700, fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: '#0d1829' }}>
+                          ₹{debt.amount.toLocaleString('en-IN')}
                         </div>
-                        <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
                           {debt.note || 'Bilateral trade credit'}
                         </div>
                       </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <Badge variant="warning">Due {debt.dueDate ? new Date(debt.dueDate).toLocaleDateString() : 'Soon'}</Badge>
-                      <ArrowRight size={14} color="var(--text-muted)" aria-hidden="true" />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span
+                        style={{
+                          padding: '2px 6px',
+                          border: '1px solid #c27814',
+                          background: 'rgba(194, 120, 20, 0.08)',
+                          color: '#c27814',
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: '0.68rem',
+                          fontWeight: 700,
+                          borderRadius: 2,
+                        }}
+                      >
+                        DUE {debt.dueDate ? new Date(debt.dueDate).toLocaleDateString() : 'SOON'}
+                      </span>
+                      <ArrowRight size={12} color="#a1988a" aria-hidden="true" />
                     </div>
                   </div>
                 ))}
@@ -278,34 +342,70 @@ export default function Overview() {
             onDrop={handleDrop}
             className="card"
             style={{
-              padding: 20,
-              background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.9) 100%)',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              flexWrap: 'wrap', gap: 16,
+              padding: 22,
+              background: '#fcfbf8',
+              border: '1px solid #dcd5cb',
+              borderRadius: 4,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 16,
+              boxShadow: '0 1px 3px rgba(13, 24, 41, 0.04)',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
               <DragHandle />
-              <div style={{ width: 48, height: 48, borderRadius: 12, background: 'var(--accent-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Share2 size={24} color="var(--accent-light)" aria-hidden="true" />
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  border: '1.5px solid #0d2247',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: '#0d2247',
+                  color: '#ffffff',
+                  borderRadius: 2,
+                  flexShrink: 0,
+                }}
+              >
+                <Share2 size={20} aria-hidden="true" />
               </div>
               <div>
-                <h3 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--text-primary)' }}>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: '#c8502a', fontWeight: 700 }}>
+                  [TOPOLOGY GRAPH // 03]
+                </div>
+                <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', fontWeight: 700, color: '#0d2247' }}>
                   Interactive Credit Network Graph
                 </h3>
-                <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
-                  Explore Tarjan Strongly Connected Components (SCCs), continuous cycle cancellations, and systemic exposure rings.
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  Explore Tarjan Strongly Connected Components (SCCs), cycle netting, and systemic risk rings.
                 </p>
               </div>
             </div>
+
             <button
               onClick={() => navigate('/network')}
-              className="btn btn--primary"
-              aria-label="Open interactive credit network graph"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+              style={{
+                background: '#0d2247',
+                color: '#ffffff',
+                border: '1px solid #0d2247',
+                padding: '9px 18px',
+                borderRadius: 2,
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                transition: 'all 0.15s ease',
+              }}
             >
-              View Full Graph
-              <ArrowRight size={16} aria-hidden="true" />
+              <div style={{ width: 8, height: 8, background: '#c8502a', borderRadius: 1 }} />
+              <span>EXPLORE NETWORK</span>
+              <ArrowRight size={13} aria-hidden="true" />
             </button>
           </div>
         );
@@ -316,38 +416,83 @@ export default function Overview() {
   };
 
   return (
-    <div className="animate-fade-in" style={{ padding: 'var(--content-padding)' }}>
-      {/* Skip link for keyboard users */}
+    <div className="animate-fade-in" style={{ padding: '0 4px' }}>
       <a href="#main-content" className="skip-link">Skip to main content</a>
 
-      {/* Top Banner & Welcome */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 14 }}>
+      {/* Top Banner & Title — Architectural Editorial Style */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 14 }}>
         <div>
-          <h1 style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 800, marginBottom: 4 }}>
-            System Portfolio Overview
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.68rem',
+              color: '#c8502a',
+              fontWeight: 700,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              marginBottom: 4,
+            }}
+          >
+            [SPECIFICATION 01 // OVERVIEW RADAR]
+          </div>
+          <h1
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: '1.95rem',
+              fontWeight: 700,
+              color: '#0d2247',
+              letterSpacing: '-0.025em',
+              lineHeight: 1.2,
+            }}
+          >
+            System Portfolio &amp; Debt Network
           </h1>
-          <p style={{ color: 'var(--text-muted)' }}>
-            Real-time multi-tenant debt settlement matrix, liquidity radar, and risk exposure.
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: 4 }}>
+            Real-time multi-tenant debt settlement matrix, Poisson liquidity radar, and risk exposure.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
+
+        <div style={{ display: 'flex', gap: 8 }}>
           <button
             onClick={() => navigate('/settle')}
-            className="btn btn--secondary"
-            aria-label="Open settle center"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+            style={{
+              background: '#ffffff',
+              color: '#0d2247',
+              border: '1px solid #dcd5cb',
+              padding: '8px 14px',
+              borderRadius: 2,
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
           >
-            <GitCommit size={15} aria-hidden="true" />
-            Settle Center
+            <GitCommit size={14} aria-hidden="true" />
+            <span>SETTLE MATRIX</span>
           </button>
+
           <button
             onClick={() => navigate('/network')}
-            className="btn btn--primary"
-            aria-label="Open graph visualizer"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+            style={{
+              background: '#0d2247',
+              color: '#ffffff',
+              border: '1px solid #0d2247',
+              padding: '8px 14px',
+              borderRadius: 2,
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
           >
-            <Share2 size={15} aria-hidden="true" />
-            Open Graph Visualizer
+            <div style={{ width: 8, height: 8, background: '#c8502a', borderRadius: 1 }} />
+            <span>VISUALIZER</span>
           </button>
         </div>
       </div>
@@ -357,97 +502,150 @@ export default function Overview() {
         <div
           role="alert"
           style={{
-            padding: 16, borderRadius: 8, background: 'var(--risk-critical-bg)',
-            border: '1px solid var(--risk-critical)', display: 'flex', alignItems: 'center',
-            justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 12,
+            padding: '14px 18px',
+            borderRadius: 2,
+            background: 'rgba(200, 80, 42, 0.08)',
+            border: '1px solid #c8502a',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: 20,
+            flexWrap: 'wrap',
+            gap: 12,
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <AlertTriangle size={22} color="var(--risk-critical)" aria-hidden="true" />
+            <AlertTriangle size={20} color="#c8502a" aria-hidden="true" />
             <div>
-              <div style={{ fontWeight: 700, color: 'var(--risk-critical)', fontSize: 'var(--font-size-sm)' }}>
-                {overdueDebts.length} Overdue Obligation{overdueDebts.length > 1 ? 's' : ''} Detected
+              <div style={{ fontWeight: 700, color: '#c8502a', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
+                {overdueDebts.length} OVERDUE OBLIGATION{overdueDebts.length > 1 ? 'S' : ''} DETECTED
               </div>
-              <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
-                Total overdue balance: ₹{overdueDebts.reduce((s: number, d: any) => s + d.amount, 0).toLocaleString()}. Immediate settlement or netting recommended.
+              <div style={{ fontSize: '0.78rem', color: '#424d5d' }}>
+                Total overdue balance: ₹{overdueDebts.reduce((s: number, d: any) => s + d.amount, 0).toLocaleString('en-IN')}. Netting cycles recommended to restore liquidity.
               </div>
             </div>
           </div>
           <button
             onClick={() => navigate('/ledger')}
-            className="btn btn--secondary"
-            aria-label="Review overdue debts in ledger"
-            style={{ fontSize: 'var(--font-size-xs)', padding: '6px 14px' }}
+            style={{
+              background: '#c8502a',
+              color: '#ffffff',
+              border: '1px solid #c8502a',
+              padding: '5px 12px',
+              borderRadius: 2,
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.72rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
           >
-            Review Overdue Debts
+            REVIEW IN LEDGER
           </button>
         </div>
       )}
 
-      {/* Primary 4 Metric Cards */}
+      {/* Primary 4 Metric Cards — Architectural Spec Cards */}
       <div
         id="main-content"
         role="region"
         aria-label="Portfolio summary metrics"
-        style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginBottom: 24 }}
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          gap: 16,
+          marginBottom: 20,
+        }}
       >
-        <div className="glass-card" style={{ padding: 20 }} aria-label={`Active outstanding debt: ₹${totalOutstanding.toLocaleString()}`}>
+        <div
+          className="stat-card"
+          style={{
+            background: '#ffffff',
+            border: '1px solid #dcd5cb',
+            borderRadius: 4,
+            padding: '18px 20px',
+            position: 'relative',
+          }}
+        >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>
-              Active Outstanding Debt
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 700 }}>
+              ① ACTIVE DEBT OUTSTANDING
             </span>
-            <Receipt size={18} color="var(--teal)" aria-hidden="true" />
+            <Receipt size={16} color="#0d2247" aria-hidden="true" />
           </div>
-          <div style={{ fontSize: '2.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-            ₹{isLoading ? '...' : totalOutstanding.toLocaleString()}
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.9rem', fontWeight: 700, color: '#0d2247' }}>
+            ₹{isLoading ? '...' : totalOutstanding.toLocaleString('en-IN')}
           </div>
-          <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', marginTop: 4 }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
             {activeDebts.length} active bilateral obligations
           </div>
         </div>
 
-        <div className="glass-card" style={{ padding: 20 }} aria-label={`Portfolio default risk: ${(avgRisk * 100).toFixed(1)}%`}>
+        <div
+          className="stat-card"
+          style={{
+            background: '#ffffff',
+            border: '1px solid #dcd5cb',
+            borderRadius: 4,
+            padding: '18px 20px',
+          }}
+        >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>
-              Portfolio Default Risk
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 700 }}>
+              ② PORTFOLIO DEFAULT RISK
             </span>
-            <TrendingUp size={18} color="var(--accent-light)" aria-hidden="true" />
+            <TrendingUp size={16} color="#c27814" aria-hidden="true" />
           </div>
-          <div style={{ fontSize: '2.2rem', fontWeight: 800, color: avgRisk < 0.3 ? 'var(--risk-low)' : 'var(--risk-critical)' }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.9rem', fontWeight: 700, color: avgRisk < 0.3 ? '#1e6b4b' : '#c8502a' }}>
             {isLoading ? '...' : `${(avgRisk * 100).toFixed(1)}%`}
           </div>
-          <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', marginTop: 4 }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
             {highRiskCount} merchant{highRiskCount === 1 ? '' : 's'} on elevated watchlist
           </div>
         </div>
 
-        <div className="glass-card" style={{ padding: 20 }} aria-label={`${dueSoonDebts.length} debts due in next 7 days`}>
+        <div
+          className="stat-card"
+          style={{
+            background: '#ffffff',
+            border: '1px solid #dcd5cb',
+            borderRadius: 4,
+            padding: '18px 20px',
+          }}
+        >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>
-              Due in Next 7 Days
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 700 }}>
+              ③ DUE IN NEXT 7 DAYS
             </span>
-            <Clock size={18} color="var(--risk-high)" aria-hidden="true" />
+            <Clock size={16} color="#c8502a" aria-hidden="true" />
           </div>
-          <div style={{ fontSize: '2.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.9rem', fontWeight: 700, color: '#0d2247' }}>
             {isLoading ? '...' : dueSoonDebts.length}
           </div>
-          <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', marginTop: 4 }}>
-            ₹{dueSoonDebts.reduce((s: number, d: any) => s + d.amount, 0).toLocaleString()} upcoming liquidity demand
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
+            ₹{dueSoonDebts.reduce((s: number, d: any) => s + d.amount, 0).toLocaleString('en-IN')} liquidity demand
           </div>
         </div>
 
-        <div className="glass-card" style={{ padding: 20 }} aria-label={`${unreadCount} unread alerts`}>
+        <div
+          className="stat-card"
+          style={{
+            background: '#ffffff',
+            border: '1px solid #dcd5cb',
+            borderRadius: 4,
+            padding: '18px 20px',
+          }}
+        >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>
-              Unread Alerts &amp; Inbox
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 700 }}>
+              ④ UNREAD ALERTS &amp; INBOX
             </span>
-            <ShieldAlert size={18} color="var(--accent-light)" aria-hidden="true" />
+            <ShieldAlert size={16} color="#0d2247" aria-hidden="true" />
           </div>
-          <div style={{ fontSize: '2.2rem', fontWeight: 800, color: unreadCount > 0 ? 'var(--risk-high)' : 'var(--teal)' }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.9rem', fontWeight: 700, color: unreadCount > 0 ? '#c8502a' : '#1e6b4b' }}>
             {unreadCount}
           </div>
-          <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', marginTop: 4 }}>
-            Direct counterparty &amp; settlement notifications
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
+            Direct counterparty notifications
           </div>
         </div>
       </div>
@@ -455,8 +653,8 @@ export default function Overview() {
       {/* Draggable Middle Grid Widgets */}
       <div
         role="region"
-        aria-label="Customizable dashboard widgets — drag to reorder"
-        style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 20, marginBottom: 24 }}
+        aria-label="Customizable dashboard widgets"
+        style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 16, marginBottom: 16 }}
       >
         {widgetOrder.slice(0, 2).map(renderWidget)}
       </div>

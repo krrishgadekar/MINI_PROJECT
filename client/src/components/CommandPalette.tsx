@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api';
 import { useGroup } from '../state/GroupProvider';
+import { useAuth } from '../state/AuthProvider';
 import {
   Search,
   LayoutDashboard,
@@ -18,6 +19,7 @@ import {
   ArrowRight,
   CreditCard,
   Building,
+  LogOut,
 } from 'lucide-react';
 
 interface PaletteItem {
@@ -35,6 +37,7 @@ export default function CommandPalette() {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   const navigate = useNavigate();
+  const { logout } = useAuth();
   const { activeGroupId } = useGroup();
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -94,8 +97,20 @@ export default function CommandPalette() {
       { id: 'page-inbox', category: 'Pages', title: 'Inbox & Approvals', subtitle: 'Actionable requests & alerts', icon: Bell, onSelect: () => navigate('/inbox') },
       { id: 'page-settings', category: 'Pages', title: 'Settings', subtitle: 'Preferences, sessions & password', icon: Settings, onSelect: () => navigate('/settings') },
       { id: 'page-profile', category: 'Pages', title: 'Profile', subtitle: 'Manage your merchant profile', icon: User, onSelect: () => navigate('/profile') },
+      {
+        id: 'action-logout',
+        category: 'Pages',
+        title: 'Log Out',
+        subtitle: 'Sign out of your CreditFlow account',
+        icon: LogOut,
+        onSelect: () => {
+          setIsOpen(false);
+          logout();
+          navigate('/login');
+        },
+      },
     ],
-    [navigate]
+    [navigate, logout]
   );
 
   const merchantItems: PaletteItem[] = useMemo(() => {

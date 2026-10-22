@@ -49,6 +49,9 @@ export const createApp = (): Application => {
   app.get('/health', (_req, res) => {
     res.json({ status: 'healthy' });
   });
+  app.get('/api/health', (_req, res) => {
+    res.json({ status: 'healthy' });
+  });
 
   app.get('/health/deep', getDeepHealth);
   app.get('/api/health/deep', getDeepHealth);

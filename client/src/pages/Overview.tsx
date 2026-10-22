@@ -84,13 +84,13 @@ export default function Overview() {
     [activeDebts],
   );
 
-  const now = new Date();
-  const overdueDebts = useMemo(
-    () => activeDebts.filter((d: any) => d.dueDate && new Date(d.dueDate) < now),
-    [activeDebts],
-  );
+  const overdueDebts = useMemo(() => {
+    const now = new Date();
+    return activeDebts.filter((d: any) => d.dueDate && new Date(d.dueDate) < now);
+  }, [activeDebts]);
 
   const dueSoonDebts = useMemo(() => {
+    const now = new Date();
     const sevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
     return activeDebts.filter(
       (d: any) => d.dueDate && new Date(d.dueDate) >= now && new Date(d.dueDate) <= sevenDays,

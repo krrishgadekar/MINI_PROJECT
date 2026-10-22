@@ -196,7 +196,8 @@ export default function Groups() {
     try {
       setUpdatingMid(member.merchantId);
       await api.groups.updateRole(selectedGroup._id, member.merchantId, newRole);
-      toast.success(`Role for ${member.merchant?.name || member.merchantId} updated to ${newRole}`);
+      const memberName = (member as any).name || member.merchant?.name || member.merchantId;
+      toast.success(`Role for ${memberName} updated to ${newRole}`);
       await loadMembers(selectedGroup._id);
     } catch (err: any) {
       toast.error('Failed to update role: ' + err.message);
@@ -208,8 +209,9 @@ export default function Groups() {
   // Remove Member
   const handleRemoveMember = async (member: EnrichedMembership) => {
     if (!selectedGroup || removingMid) return;
+    const memberName = (member as any).name || member.merchant?.name || member.merchantId;
     const confirm = window.confirm(
-      `Are you sure you want to remove ${member.merchant?.name || member.merchantId} from ${selectedGroup.name}?`,
+      `Are you sure you want to remove ${memberName} from ${selectedGroup.name}?`,
     );
     if (!confirm) return;
 
@@ -597,13 +599,14 @@ export default function Groups() {
                     </thead>
                     <tbody>
                       {members.map((member) => {
-                        const mName = member.merchant?.name || member.merchantId;
-                        const mEmail = member.merchant?.email || `${member.merchantId.toLowerCase()}@demo.com`;
+                        const mName = (member as any).name || member.merchant?.name || member.merchantId;
+                        const mEmail = (member as any).email || member.merchant?.email || `${mName.toLowerCase().replace(/\s+/g, '.')}@demo.com`;
                         const isOwner = member.role === 'owner';
+                        const displayInitials = mName.replace(/_/g, ' ').trim().slice(0, 2).toUpperCase();
 
                         return (
                           <tr
-                            key={member._id}
+                            key={member._id || (member as any).merchantId}
                             style={{
                               borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
                               fontSize: '0.88rem',
@@ -625,7 +628,7 @@ export default function Groups() {
                                     color: 'var(--accent-light)',
                                   }}
                                 >
-                                  {mName.slice(0, 2).toUpperCase()}
+                                  {displayInitials}
                                 </div>
                                 <span>{mName}</span>
                               </div>

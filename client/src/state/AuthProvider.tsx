@@ -33,9 +33,11 @@ interface AuthContextValue {
   merchant: AuthMerchant | null;
   groups: AuthGroupEntry[];
   isLoading: boolean;
+  isSwitching: boolean;
   isAuthenticated: boolean;
   reload: () => void;
   logout: () => void;
+  switchMerchant: (email: string) => Promise<void>;
 }
 
 // ── Context ───────────────────────────────────────────────────────────────────
@@ -44,9 +46,11 @@ const AuthContext = createContext<AuthContextValue>({
   merchant: null,
   groups: [],
   isLoading: false,
+  isSwitching: false,
   isAuthenticated: false,
   reload: () => {},
   logout: () => {},
+  switchMerchant: async () => {},
 });
 
 export function useAuth() {
@@ -86,6 +90,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const [isSwitching, setIsSwitching] = useState<boolean>(false);
+
+  const switchMerchant = useCallback(async (email: string) => {
+    try {
+      setIsSwitching(true);
+      const res = await apiClient.post('/auth/login', {
+        email,
+        password: 'CreditFlow@123',
+      });
+      const { accessToken, refreshToken, merchant: newMerchant } = res.data;
+      if (accessToken) {
+        localStorage.setItem('creditflow_token', accessToken);
+        if (refreshToken) {
+          localStorage.setItem('creditflow_refresh_token', refreshToken);
+        }
+        const meRes = await apiClient.get('/auth/me');
+        const userGroups = meRes.data.groups ?? [];
+        setMerchant(meRes.data.merchant ?? newMerchant ?? null);
+        setGroups(userGroups);
+
+        const crawford = userGroups.find(
+          (g: any) =>
+            g._id === '6ad99888e5b5dd4529e55719' ||
+            g.name?.toLowerCase().includes('crawford'),
+        );
+        if (crawford) {
+          localStorage.setItem('creditflow_active_group', crawford._id);
+        } else if (userGroups.length > 0) {
+          localStorage.setItem('creditflow_active_group', userGroups[0]._id);
+        }
+        window.dispatchEvent(new Event('creditflow:group-changed'));
+      }
+    } catch (err: any) {
+      console.error('Failed to switch merchant:', err);
+      throw err;
+    } finally {
+      setIsSwitching(false);
+    }
+  }, []);
+
   const logout = useCallback(() => {
     localStorage.removeItem('creditflow_token');
     localStorage.removeItem('creditflow_refresh_token');
@@ -117,9 +161,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         merchant,
         groups,
         isLoading,
+        isSwitching,
         isAuthenticated,
         reload: fetchMe,
         logout,
+        switchMerchant,
       }}
     >
       {children}

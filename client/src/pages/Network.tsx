@@ -4,10 +4,10 @@ import { useDebts } from '../hooks/useDebts';
 import { useGroupRisk } from '../hooks/useRisk';
 import { useSimulateContagion } from '../hooks/useRisk';
 import GraphVisualizer from '../components/GraphVisualizer';
-import { Badge, Skeleton } from '../components/ui';
+import { Skeleton } from '../components/ui';
 import type { DebtEdge, RiskScoreResponse } from '../types';
 import {
-  Share2, AlertTriangle, ShieldAlert, Layers,
+  Share2, AlertTriangle, ShieldAlert,
   Zap, X,
 } from 'lucide-react';
 
@@ -100,37 +100,96 @@ export default function Network() {
   const isLoading = debtsLoading || riskLoading;
 
   return (
-    <div className="page-container" style={{ padding: 'var(--content-padding)' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 14 }}>
+    <div className="page-container" style={{ padding: '0 4px' }}>
+      {/* Header — Illoca Architectural Studio Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 14 }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
-            <h1 style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 800 }}>Obligation Network &amp; Cascade Graph</h1>
-            <Badge variant="primary">{merchants.length} Nodes · {debts.length} Active Edges</Badge>
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.68rem',
+              color: '#c8502a',
+              fontWeight: 700,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              marginBottom: 4,
+            }}
+          >
+            [SPECIFICATION 02 // DIRECTED GRAPH TOPOLOGY]
           </div>
-          <p style={{ color: 'var(--text-muted)' }}>
-            Real-time multi-tenant debt topology visualizer with client-side BFS traversal and systemic default contagion shading.
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <h1
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: '1.95rem',
+                fontWeight: 700,
+                color: '#0d2247',
+                letterSpacing: '-0.025em',
+                lineHeight: 1.2,
+              }}
+            >
+              Obligation Network &amp; Cascade Graph
+            </h1>
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.72rem',
+                padding: '3px 8px',
+                border: '1px solid #0d2247',
+                color: '#0d2247',
+                background: '#faf8f4',
+                borderRadius: 2,
+                fontWeight: 700,
+              }}
+            >
+              {merchants.length} NODES · {debts.length} EDGES
+            </span>
+          </div>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: 4 }}>
+            Multi-tenant debt topology visualizer with client-side BFS traversal and systemic default contagion shading.
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button
             onClick={() => navigate('/risk')}
-            className="btn btn--secondary"
-            aria-label="Go to risk radar page"
-            style={{ fontSize: 'var(--font-size-xs)', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            style={{
+              background: '#ffffff',
+              color: '#0d2247',
+              border: '1px solid #dcd5cb',
+              padding: '8px 14px',
+              borderRadius: 2,
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
           >
-            <ShieldAlert size={14} color="var(--risk-critical)" aria-hidden="true" />
-            Risk Radar
+            <ShieldAlert size={14} color="#c8502a" aria-hidden="true" />
+            <span>RISK RADAR</span>
           </button>
           <button
             onClick={() => navigate('/settle')}
-            className="btn btn--primary"
-            aria-label="Go to netting and settlement page"
-            style={{ fontSize: 'var(--font-size-xs)', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            style={{
+              background: '#0d2247',
+              color: '#ffffff',
+              border: '1px solid #0d2247',
+              padding: '8px 14px',
+              borderRadius: 2,
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
           >
-            <Layers size={14} aria-hidden="true" />
-            Netting &amp; Settlement
+            <div style={{ width: 8, height: 8, background: '#c8502a', borderRadius: 1 }} />
+            <span>SETTLEMENT ENGINE</span>
           </button>
         </div>
       </div>
@@ -140,27 +199,31 @@ export default function Network() {
         <div
           role="alert"
           aria-live="polite"
-          className="card"
           style={{
-            marginBottom: 20, padding: '14px 20px',
-            background: 'rgba(239, 68, 68, 0.12)',
-            border: '1px solid var(--risk-critical)',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            flexWrap: 'wrap', gap: 12,
+            marginBottom: 20,
+            padding: '12px 18px',
+            background: 'rgba(200, 80, 42, 0.08)',
+            border: '1px solid #c8502a',
+            borderRadius: 2,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 12,
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <AlertTriangle size={24} color="var(--risk-critical)" aria-hidden="true" />
+            <AlertTriangle size={20} color="#c8502a" aria-hidden="true" />
             <div>
-              <div style={{ fontWeight: 700, color: 'var(--risk-critical)', fontSize: 'var(--font-size-sm)' }}>
-                Systemic Default Contagion Simulation Active
+              <div style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#c8502a', fontSize: '0.8rem' }}>
+                SYSTEMIC DEFAULT CASCADE SIMULATION ACTIVE
               </div>
-              <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
-                Source: <strong>{contagionSource.replace(/_/g, ' ')}</strong> (red node).
-                Downstream nodes shaded by loss magnitude.
+              <div style={{ fontSize: '0.78rem', color: '#424d5d' }}>
+                Failure Source: <strong>{contagionSource.replace(/_/g, ' ')}</strong> (indicated in red).
+                Downstream counterparties shaded by loss propagation.
                 {totalLoss > 0 && (
-                  <span style={{ marginLeft: 8, color: 'var(--risk-critical)', fontWeight: 700 }}>
-                    Total network loss: ₹{totalLoss.toLocaleString()}
+                  <span style={{ marginLeft: 8, color: '#c8502a', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
+                    Total Network Loss: ₹{totalLoss.toLocaleString('en-IN')}
                   </span>
                 )}
               </div>
@@ -168,43 +231,73 @@ export default function Network() {
           </div>
 
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            {/* Contagion simulation status chip */}
             {contagionMutation.isPending && (
-              <span style={{
-                padding: '4px 12px', borderRadius: 20, fontSize: 'var(--font-size-xs)',
-                background: 'rgba(251, 191, 36, 0.15)', color: 'var(--risk-medium)',
-                border: '1px solid var(--risk-medium)', display: 'inline-flex', alignItems: 'center', gap: 5,
-              }}>
-                <Zap size={12} aria-hidden="true" /> Simulating...
+              <span
+                style={{
+                  padding: '3px 8px',
+                  borderRadius: 2,
+                  fontSize: '0.72rem',
+                  background: 'rgba(194, 120, 20, 0.1)',
+                  color: '#c27814',
+                  border: '1px solid #c27814',
+                  fontFamily: 'var(--font-mono)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                }}
+              >
+                <Zap size={11} aria-hidden="true" /> SIMULATING...
               </span>
             )}
 
-            {/* Clear overlay chip */}
             <button
               onClick={clearContagion}
-              className="btn btn--secondary"
-              aria-label="Clear contagion shading and return to normal view"
-              style={{ fontSize: 'var(--font-size-xs)', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              style={{
+                background: '#ffffff',
+                border: '1px solid #dcd5cb',
+                color: '#0d2247',
+                padding: '4px 10px',
+                borderRadius: 2,
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.72rem',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+              }}
             >
-              <X size={13} aria-hidden="true" />
-              Clear Overlay
+              <X size={12} aria-hidden="true" />
+              CLEAR OVERLAY
             </button>
           </div>
         </div>
       )}
 
-      {/* Interactive Graph Canvas */}
-      <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: 24, position: 'relative' }}>
+      {/* Interactive Graph Canvas — Drafting Sheet Frame */}
+      <div
+        style={{
+          border: '1px solid #dcd5cb',
+          borderRadius: 4,
+          background: '#fdfbf7',
+          padding: 0,
+          overflow: 'hidden',
+          marginBottom: 20,
+          position: 'relative',
+          boxShadow: '0 1px 3px rgba(13, 24, 41, 0.04)',
+        }}
+      >
         {isLoading ? (
           <div style={{ height: 520, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Skeleton width="100%" height={520} />
           </div>
         ) : merchants.length === 0 ? (
           <div style={{ height: 420, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-            <Share2 size={48} color="var(--text-muted)" style={{ marginBottom: 12 }} aria-hidden="true" />
-            <h3 style={{ fontSize: 'var(--font-size-md)', fontWeight: 600 }}>No active debt obligations</h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: 'var(--font-size-xs)', marginTop: 4 }}>
-              Create or confirm debts in the Ledger to populate the network graph.
+            <Share2 size={40} color="#a1988a" style={{ marginBottom: 12 }} aria-hidden="true" />
+            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', fontWeight: 600, color: '#0d2247' }}>
+              No active debt obligations
+            </h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: 4 }}>
+              Record confirmed trades in the Ledger to populate the network graph.
             </p>
           </div>
         ) : (
@@ -219,40 +312,71 @@ export default function Network() {
         )}
       </div>
 
-      {/* Summary KPI Cards */}
+      {/* Summary KPI Cards — Architectural Specification Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
-        <div className="card" style={{ padding: 18 }}>
-          <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', marginBottom: 6 }}>
-            Total Network Obligations
+        <div
+          className="stat-card"
+          style={{
+            background: '#ffffff',
+            border: '1px solid #dcd5cb',
+            borderRadius: 4,
+            padding: '16px 20px',
+          }}
+        >
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 700, marginBottom: 4 }}>
+            ① TOTAL OBLIGATION VOLUME
           </div>
-          <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 800, color: 'var(--text-primary)' }}>
-            ₹{totalDebtVolume.toLocaleString()}
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.75rem', fontWeight: 700, color: '#0d2247' }}>
+            ₹{totalDebtVolume.toLocaleString('en-IN')}
           </div>
-          <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--teal)', marginTop: 4 }}>
-            Across {debts.length} active credit edges
+          <div style={{ fontSize: '0.75rem', color: '#1e6b4b', marginTop: 4, fontFamily: 'var(--font-mono)' }}>
+            Across {debts.length} active directed credit edges
           </div>
         </div>
 
-        <div className="card" style={{ padding: 18 }}>
-          <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', marginBottom: 6 }}>
-            Network Density &amp; Vertices
+        <div
+          className="stat-card"
+          style={{
+            background: '#ffffff',
+            border: '1px solid #dcd5cb',
+            borderRadius: 4,
+            padding: '16px 20px',
+          }}
+        >
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 700, marginBottom: 4 }}>
+            ② NETWORK VERTICES &amp; DENSITY
           </div>
-          <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 800, color: 'var(--accent-light)' }}>
-            {merchants.length} Merchants
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.75rem', fontWeight: 700, color: '#0d2247' }}>
+            {merchants.length} MERCHANTS
           </div>
-          <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', marginTop: 4 }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4, fontFamily: 'var(--font-mono)' }}>
             {debts.length > 0 ? (debts.length / Math.max(1, merchants.length * (merchants.length - 1))).toFixed(3) : '0.000'} graph density
           </div>
         </div>
 
-        <div className="card" style={{ padding: 18 }}>
-          <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', marginBottom: 6 }}>
-            Contagion Vulnerability Status
+        <div
+          className="stat-card"
+          style={{
+            background: '#ffffff',
+            border: '1px solid #dcd5cb',
+            borderRadius: 4,
+            padding: '16px 20px',
+          }}
+        >
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 700, marginBottom: 4 }}>
+            ③ CASCADE VULNERABILITY STATUS
           </div>
-          <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 800, color: contagionSource ? 'var(--risk-critical)' : 'var(--teal)' }}>
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '1.75rem',
+              fontWeight: 700,
+              color: contagionSource ? '#c8502a' : '#1e6b4b',
+            }}
+          >
             {contagionSource ? 'CASCADE ACTIVE' : 'SECURE / NORMAL'}
           </div>
-          <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', marginTop: 4 }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
             {contagionSource ? `Traced from ${contagionSource.replace(/_/g, ' ')}` : 'Click any node to run BFS traversal'}
           </div>
         </div>

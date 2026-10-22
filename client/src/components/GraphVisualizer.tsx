@@ -15,16 +15,16 @@ interface GraphVisualizerProps {
 }
 
 const RISK_COLORS: Record<string, string> = {
-  LOW: "#22c55e",
-  MEDIUM: "#f59e0b",
-  HIGH: "#f97316",
-  CRITICAL: "#ef4444",
+  LOW: "#1e6b4b",
+  MEDIUM: "#c27814",
+  HIGH: "#c8502a",
+  CRITICAL: "#b83a2c",
 };
 
-const DEFAULT_NODE_COLOR = "#6366f1";
-const HIGHLIGHT_NODE_COLOR = "#a78bfa";
-const EDGE_COLOR = "rgba(148, 163, 184, 0.25)";
-const HIGHLIGHT_EDGE_COLOR = "#818cf8";
+const DEFAULT_NODE_COLOR = "#0d2247";
+const HIGHLIGHT_NODE_COLOR = "#c8502a";
+const EDGE_COLOR = "rgba(13, 34, 71, 0.22)";
+const HIGHLIGHT_EDGE_COLOR = "#c8502a";
 
 // Interpolates a hex colour from green→amber→red based on a 0..1 ratio
 function lossColour(ratio: number): string {
@@ -247,10 +247,10 @@ export default function GraphVisualizer({
       ctx.shadowBlur = 0;
       ctx.globalAlpha = isHighlighted ? 1 : 0.3;
 
-      ctx.font = `${isSelected ? "600" : "500"} ${fontSize}px Inter, sans-serif`;
+      ctx.font = `${isSelected ? "700" : "600"} ${fontSize}px 'Space Grotesk', -apple-system, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
-      ctx.fillStyle = isHighlighted ? "#f1f5f9" : "#64748b";
+      ctx.fillStyle = isHighlighted ? "#0d1829" : "#a1988a";
       ctx.fillText(label, node.x!, node.y! + radius + 3);
 
       // Show loss label if contagion active
@@ -258,8 +258,8 @@ export default function GraphVisualizer({
         const loss = contagionLossMap[nodeId] || contagionLossMap[label] || 0;
         if (loss > 0) {
           const lossLabel = `₹${(loss / 1000).toFixed(0)}k`;
-          ctx.font = `600 ${Math.max(9 / globalScale, 2.5)}px Inter, sans-serif`;
-          ctx.fillStyle = "#fbbf24";
+          ctx.font = `700 ${Math.max(9 / globalScale, 2.5)}px 'JetBrains Mono', monospace`;
+          ctx.fillStyle = "#c8502a";
           ctx.fillText(lossLabel, node.x!, node.y! + radius + fontSize + 5);
         }
       }
@@ -316,8 +316,8 @@ export default function GraphVisualizer({
         const midX = (source.x + target.x) / 2;
         const midY = (source.y + target.y) / 2;
         const fs = Math.max(9 / globalScale, 2.5);
-        ctx.font = `500 ${fs}px Inter, sans-serif`;
-        ctx.fillStyle = "#a5b4fc";
+        ctx.font = `600 ${fs}px 'JetBrains Mono', monospace`;
+        ctx.fillStyle = "#c8502a";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(`₹${(link.amount / 1000).toFixed(0)}k`, midX, midY - 5 / globalScale);
@@ -347,33 +347,33 @@ export default function GraphVisualizer({
             bottom: 16,
             left: 16,
             zIndex: 10,
-            background: "rgba(10, 17, 40, 0.88)",
-            border: "1px solid rgba(239, 68, 68, 0.3)",
-            borderRadius: 10,
+            background: "rgba(255, 255, 255, 0.95)",
+            border: "1px solid #dcd5cb",
+            borderRadius: 2,
             padding: "10px 14px",
             fontSize: "0.7rem",
-            backdropFilter: "blur(8px)",
+            boxShadow: "0 4px 12px rgba(13, 24, 41, 0.08)",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, fontWeight: 700, color: "#f87171" }}>
-            <AlertTriangle size={12} aria-hidden="true" /> Contagion Loss Scale
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, fontWeight: 700, color: "#c8502a", fontFamily: "var(--font-mono)" }}>
+            <AlertTriangle size={12} aria-hidden="true" /> CONTAGION SCALE
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-            <div style={{ width: 12, height: 12, borderRadius: "50%", background: "#ef4444", flexShrink: 0 }} />
-            <span style={{ color: "#f1f5f9" }}>Source (failed merchant)</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, fontFamily: "var(--font-mono)" }}>
+            <div style={{ width: 10, height: 10, background: "#ef4444", flexShrink: 0 }} />
+            <span style={{ color: "#0d1829" }}>Source (failed node)</span>
           </div>
           {/* Gradient bar */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-            <span style={{ color: "#94a3b8", fontSize: "0.65rem" }}>None</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4, fontFamily: "var(--font-mono)" }}>
+            <span style={{ color: "#718096", fontSize: "0.65rem" }}>None</span>
             <div style={{
-              width: 80, height: 8, borderRadius: 4,
-              background: "linear-gradient(to right, #22c55e, #f59e0b, #ef4444)",
+              width: 80, height: 6, borderRadius: 1,
+              background: "linear-gradient(to right, #1e6b4b, #c27814, #c8502a)",
               flexShrink: 0,
             }} />
-            <span style={{ color: "#94a3b8", fontSize: "0.65rem" }}>Max ₹{(maxLoss / 1000).toFixed(0)}k</span>
+            <span style={{ color: "#718096", fontSize: "0.65rem" }}>Max ₹{(maxLoss / 1000).toFixed(0)}k</span>
           </div>
-          <div style={{ color: "#64748b", fontSize: "0.6rem", marginTop: 6 }}>
-            Loss shown on each node in ₹k
+          <div style={{ color: "#718096", fontSize: "0.65rem", marginTop: 6, fontFamily: "var(--font-mono)" }}>
+            Loss indicated on each node
           </div>
         </div>
       )}

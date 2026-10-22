@@ -1,13 +1,15 @@
 import { useState, useEffect } from "react";
 import {
   Bell, Moon, Sun, Shield, Globe, Clock, Zap,
-  CheckCircle, Save, Loader, Laptop, Smartphone, Trash2, Key, RefreshCw,
+  CheckCircle, Save, Loader, Laptop, Smartphone, Trash2, Key, RefreshCw, LogOut,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { useNotificationPreferences, useUpdateNotificationPreferences } from "../hooks/useNotifications";
 import { useToast } from "../components/ui/Toast";
 import { Skeleton } from "../components/ui";
+import { useAuth } from "../state/AuthProvider";
 
 // ─── Theme helpers ────────────────────────────────────────────────────────────
 function getStoredTheme(): "dark" | "light" {
@@ -418,6 +420,8 @@ function SessionsSection() {
 }
 
 function SecuritySection() {
+  const navigate = useNavigate();
+  const { logout } = useAuth();
   const { success: showSuccess, error: showError } = useToast();
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -575,6 +579,25 @@ function SecuritySection() {
             </div>
           </form>
         )}
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0", borderBottom: "1px solid var(--border-secondary)" }}>
+        <div>
+          <div style={{ fontSize: "var(--font-size-sm)", fontWeight: 600 }}>Active Session</div>
+          <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", marginTop: 2 }}>Sign out of your account on this device</div>
+        </div>
+        <button
+          id="settings-logout-btn"
+          type="button"
+          onClick={() => {
+            logout();
+            navigate("/login");
+          }}
+          className="btn btn-secondary btn-sm"
+          style={{ display: "flex", alignItems: "center", gap: 6, color: "#f87171", borderColor: "rgba(239, 68, 68, 0.3)" }}
+        >
+          <LogOut size={14} /> Log Out
+        </button>
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0" }}>

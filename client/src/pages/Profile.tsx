@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
-import { User, Mail, MapPin, Building2, Phone, Save, X, Loader, Edit3 } from "lucide-react";
+import { User, Mail, MapPin, Building2, Phone, Save, X, Loader, Edit3, LogOut } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../state/AuthProvider";
 import { api } from "../api";
 import { useToast } from "../components/ui/Toast";
 
 export default function Profile() {
-  const { merchant, reload } = useAuth();
+  const navigate = useNavigate();
+  const { merchant, reload, logout } = useAuth();
   const { success: showSuccess, error: showError } = useToast();
 
   const [isEditing, setIsEditing] = useState(false);
@@ -253,6 +255,63 @@ export default function Profile() {
               </div>
             </form>
           )}
+        </div>
+
+        {/* Account Session / Logout Card */}
+        <div
+          className="glass-card"
+          style={{
+            marginTop: 20,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 16,
+            border: "1px solid rgba(239, 68, 68, 0.2)",
+            background: "rgba(239, 68, 68, 0.03)",
+          }}
+        >
+          <div>
+            <div style={{ fontSize: "var(--font-size-md)", fontWeight: 700, color: "var(--text-primary)", marginBottom: 4 }}>
+              Account Session
+            </div>
+            <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
+              Signed in as <strong>{merchant?.email}</strong>. Ready to sign out of this device?
+            </div>
+          </div>
+
+          <button
+            id="profile-logout-btn"
+            type="button"
+            onClick={() => {
+              logout();
+              navigate("/login");
+            }}
+            className="btn"
+            style={{
+              background: "rgba(239, 68, 68, 0.12)",
+              color: "#f87171",
+              border: "1px solid rgba(239, 68, 68, 0.3)",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "10px 18px",
+              fontWeight: 600,
+              cursor: "pointer",
+              borderRadius: "var(--border-radius-sm)",
+              transition: "all 0.2s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "rgba(239, 68, 68, 0.22)";
+              e.currentTarget.style.borderColor = "rgba(239, 68, 68, 0.5)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "rgba(239, 68, 68, 0.12)";
+              e.currentTarget.style.borderColor = "rgba(239, 68, 68, 0.3)";
+            }}
+          >
+            <LogOut size={16} /> Log Out
+          </button>
         </div>
       </div>
     </div>

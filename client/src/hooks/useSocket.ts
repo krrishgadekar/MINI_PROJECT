@@ -20,6 +20,7 @@ export const useSocket = (): void => {
 
   useEffect(() => {
     const token =
+      localStorage.getItem('creditflow_token') ||
       localStorage.getItem('token') ||
       localStorage.getItem('accessToken') ||
       'mock_token_parth';

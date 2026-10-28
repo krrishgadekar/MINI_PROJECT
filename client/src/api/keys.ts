@@ -48,4 +48,12 @@ export const queryKeys = {
     all: ['audit'] as const,
     list: (params?: Record<string, any>) => [...queryKeys.audit.all, 'list', params] as const,
   },
+  tax: {
+    all: ['tax'] as const,
+    domains: () => [...queryKeys.tax.all, 'domains'] as const,
+    rules: (domain?: string) => [...queryKeys.tax.all, 'rules', domain] as const,
+    preview: (typeKey: string, base: number, inputs?: Record<string, any>) =>
+      [...queryKeys.tax.all, 'preview', typeKey, base, inputs] as const,
+    summary: () => [...queryKeys.tax.all, 'summary'] as const,
+  },
 };

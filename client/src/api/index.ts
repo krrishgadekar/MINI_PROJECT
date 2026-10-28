@@ -47,6 +47,7 @@ export const api: Api = {
   settlement: isMockDomain('settlement') ? mockApi.settlement : realApi.settlement,
   risk: isMockDomain('risk') ? mockApi.risk : realApi.risk,
   notifications: isMockDomain('notifications') ? mockApi.notifications : realApi.notifications,
+  tax: isMockDomain('tax') ? mockApi.tax : realApi.tax,
 };
 
 export default api;

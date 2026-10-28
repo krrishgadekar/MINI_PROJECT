@@ -141,3 +141,4 @@ Unit tests executed via `npm --prefix client test`:
 
 ## 4. Contract Deviations
 None. All types, routes, rates, legal references, error codes (`DOMAIN_LOCKED`), rounding behavior, and response shapes adhere strictly to Section 2 of `TAX_PHASE_PROMPTS.md`.
+

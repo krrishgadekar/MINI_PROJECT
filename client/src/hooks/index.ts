@@ -3,4 +3,4 @@ export * from './useSettlement';
 export * from './useRisk';
 export * from './useNotifications';
 export * from './useSocket';
-
+export * from './useTax';

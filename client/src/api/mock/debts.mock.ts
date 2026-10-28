@@ -4,7 +4,7 @@
  * Seeded from seedData.ts debts.
  */
 
-import { seedData } from '../../data/seedData';
+import { seedData } from '../../data/seedData.ts';
 import type {
   DebtsResponse,
   DebtDetailResponse,
@@ -29,7 +29,7 @@ export const setSimulate409 = (value: boolean): void => {
 
 export const getSimulate409 = (): boolean => simulate409;
 
-let mockDebts: Debt[] = seedData.debts.map((d, index) => {
+export let mockDebts: Debt[] = seedData.debts.map((d, index) => {
   const isOverdue = index === 1;
   const isPending = index === 2;
   return {
@@ -163,13 +163,17 @@ export const debtsMock = {
   },
 
   create: async (data: CreateDebtRequest): Promise<DebtResponse> => {
+    const finalAmount = data.amount ?? data.baseAmount ?? 0;
     const newDebt: Debt = {
       _id: `debt-${Date.now()}`,
       groupId: 'grp-1',
       debtorId: data.debtorId,
       creditorId: data.creditorId,
-      amount: data.amount,
-      originalAmount: data.amount,
+      amount: finalAmount,
+      originalAmount: finalAmount,
+      baseAmount: data.baseAmount ?? data.amount,
+      taxType: data.taxType,
+      taxInputs: data.taxInputs,
       status: 'pending',
       dueDate: data.dueDate || new Date(Date.now() + 86400000 * 7).toISOString(),
       note: data.note,

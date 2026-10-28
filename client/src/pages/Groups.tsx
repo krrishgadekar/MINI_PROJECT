@@ -27,11 +27,58 @@ import {
 } from 'lucide-react';
 import { api } from '../api';
 import type { EnrichedMembership } from '../api/mock/groups.mock';
-import type { Group, Role, GroupType } from '../types';
+import type { Group, Role, GroupType, TaxDomain } from '../types';
+import { TaxBadge } from '../components/tax/TaxBadge';
+import { Percent, Landmark, Globe, Home, Car, Info, Tag } from 'lucide-react';
 import { useGroup } from '../state/GroupProvider';
 import { useAuth } from '../state/AuthProvider';
 import { Badge, Modal, useToast } from '../components/ui';
 import type { BadgeVariant } from '../components/ui';
+
+
+const TAX_DOMAIN_CHOICES: Array<{
+  key: TaxDomain;
+  label: string;
+  description: string;
+  icon: React.ComponentType<{ size?: number; color?: string; style?: React.CSSProperties }>;
+  accentColor: string;
+}> = [
+  {
+    key: 'gst',
+    label: 'GST (Goods & Services Tax)',
+    description: 'Intra-state (CGST + SGST) and inter-state (IGST) standard slabs (0%, 5%, 18%, 40%).',
+    icon: Percent,
+    accentColor: '#3b82f6',
+  },
+  {
+    key: 'income',
+    label: 'Income Tax (TDS)',
+    description: 'Tax Deducted at Source under Income-tax Act 2025 on contracts, professional fees and brokerage.',
+    icon: Landmark,
+    accentColor: '#10b981',
+  },
+  {
+    key: 'customs',
+    label: 'Customs Duty (Import & Export)',
+    description: 'Customs duty on imports (BCD + SWS + IGST) and export tariff lines with zero-rated IGST.',
+    icon: Globe,
+    accentColor: '#14b8a6',
+  },
+  {
+    key: 'property',
+    label: 'Property & Stamp Duty',
+    description: 'Maharashtra Stamp Duty (Mumbai & rest of MH with woman buyer concession) and registration fees.',
+    icon: Home,
+    accentColor: '#8b5cf6',
+  },
+  {
+    key: 'vehicle',
+    label: 'Motor Vehicle Tax',
+    description: 'Maharashtra one-time road tax slabs across Petrol, Diesel, CNG, EV (exempt) and corporate registrations.',
+    icon: Car,
+    accentColor: '#f59e0b',
+  },
+];
 
 export default function Groups() {
   const { activeGroupId, setActiveGroup } = useGroup();
@@ -54,7 +101,14 @@ export default function Groups() {
   // Form states
   const [newGroupName, setNewGroupName] = useState<string>('');
   const [newGroupType, setNewGroupType] = useState<GroupType>('market');
+  const [newGroupDomain, setNewGroupDomain] = useState<TaxDomain>('gst');
   const [creating, setCreating] = useState<boolean>(false);
+
+  // Tax Domain management for existing groups
+  const [domainModalGroup, setDomainModalGroup] = useState<(Group & { role?: Role }) | null>(null);
+  const [selectedDomainForGroup, setSelectedDomainForGroup] = useState<TaxDomain>('gst');
+  const [settingDomain, setSettingDomain] = useState<boolean>(false);
+  const [debtCounts, setDebtCounts] = useState<Record<string, number>>({});
 
   const [inviteCodeInput, setInviteCodeInput] = useState<string>('');
   const [joining, setJoining] = useState<boolean>(false);
@@ -69,6 +123,18 @@ export default function Groups() {
       setLoading(true);
       const res = await api.groups.list();
       setGroups(res.groups);
+
+      // Load debts count to check domain lock (§2.2 DOMAIN_LOCKED)
+      try {
+        const debtsRes = await api.debts.list({ scope: 'all' });
+        const counts: Record<string, number> = {};
+        debtsRes.debts?.forEach((d) => {
+          if (d.groupId) counts[d.groupId] = (counts[d.groupId] || 0) + 1;
+        });
+        setDebtCounts(counts);
+      } catch (_) {
+        // Fallback if debts listing fails
+      }
       if (res.groups.length > 0) {
         // Select active group or first group
         const current = res.groups.find((g) => g._id === activeGroupId) || res.groups[0];
@@ -119,6 +185,26 @@ export default function Groups() {
     setTimeout(() => setCopiedCode(null), 2500);
   };
 
+
+  // Set Tax Domain on existing group
+  const handleSetGroupDomain = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!domainModalGroup || settingDomain) return;
+
+    try {
+      setSettingDomain(true);
+      await api.tax.setGroupDomain(domainModalGroup._id, selectedDomainForGroup);
+      toast.success(`Tax domain set to "${selectedDomainForGroup.toUpperCase()}" for "${domainModalGroup.name}"`);
+      setDomainModalGroup(null);
+      await loadGroups();
+      reloadAuth();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to set tax domain');
+    } finally {
+      setSettingDomain(false);
+    }
+  };
+
   // Rotate invite code
   const handleRotateCode = async (group: Group) => {
     try {
@@ -150,10 +236,12 @@ export default function Groups() {
       const res = await api.groups.create({
         name: newGroupName.trim(),
         type: newGroupType,
+        domain: newGroupDomain,
       });
       toast.success(`Group "${res.group.name}" created successfully!`);
       setShowCreateModal(false);
       setNewGroupName('');
+      setNewGroupDomain('gst');
       setActiveGroup(res.group._id);
       reloadAuth();
       await loadGroups();
@@ -418,7 +506,44 @@ export default function Groups() {
                         >
                           {group.type}
                         </span>
+                        <TaxBadge domain={group.domain || 'none'} size="sm" />
                       </div>
+
+                      {/* Admin-only Set Tax Domain for 'none' groups */}
+                      {(!group.domain || group.domain === 'none') && (group.role === 'owner' || group.role === 'admin') && (
+                        <div style={{ marginTop: 8 }}>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-secondary"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDomainModalGroup(group);
+                              setSelectedDomainForGroup('gst');
+                            }}
+                            disabled={(debtCounts[group._id] || 0) > 0}
+                            title={
+                              (debtCounts[group._id] || 0) > 0
+                                ? 'Cannot set tax domain: group already has recorded debts (Domain Locked)'
+                                : 'Configure tax domain for this group'
+                            }
+                            style={{
+                              fontSize: '0.72rem',
+                              padding: '3px 8px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 5,
+                              opacity: (debtCounts[group._id] || 0) > 0 ? 0.5 : 1,
+                              cursor: (debtCounts[group._id] || 0) > 0 ? 'not-allowed' : 'pointer',
+                            }}
+                          >
+                            <Tag size={11} />
+                            <span>Set tax domain</span>
+                            {(debtCounts[group._id] || 0) > 0 && (
+                              <span style={{ fontSize: '0.62rem', color: '#f59e0b' }}>(Locked)</span>
+                            )}
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     {isActive ? (
@@ -722,7 +847,7 @@ export default function Groups() {
             />
           </div>
 
-          <div style={{ marginBottom: 24 }}>
+          <div style={{ marginBottom: 18 }}>
             <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: 6 }}>
               Market Coalition Type
             </label>
@@ -746,6 +871,79 @@ export default function Groups() {
             </select>
           </div>
 
+          {/* Tax Domain Radio Cards Picker (§4) */}
+          <div style={{ marginBottom: 22 }}>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: 6 }}>
+              Tax Domain <span style={{ color: '#ef4444' }}>*</span>
+            </label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {TAX_DOMAIN_CHOICES.map((choice) => {
+                const IconComponent = choice.icon;
+                const isSelected = newGroupDomain === choice.key;
+                return (
+                  <label
+                    key={choice.key}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: 12,
+                      padding: '10px 12px',
+                      borderRadius: 6,
+                      border: isSelected
+                        ? `1.5px solid ${choice.accentColor}`
+                        : '1px solid rgba(255, 255, 255, 0.1)',
+                      background: isSelected
+                        ? 'rgba(255, 255, 255, 0.05)'
+                        : 'rgba(0, 0, 0, 0.2)',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="taxDomain"
+                      value={choice.key}
+                      checked={isSelected}
+                      onChange={() => setNewGroupDomain(choice.key)}
+                      style={{ marginTop: 3, accentColor: choice.accentColor }}
+                      required
+                    />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                        <IconComponent size={14} style={{ color: choice.accentColor }} />
+                        <span style={{ fontSize: '0.88rem', fontWeight: 700, color: isSelected ? 'white' : '#cbd5e1' }}>
+                          {choice.label}
+                        </span>
+                      </div>
+                      <p style={{ fontSize: '0.74rem', color: 'var(--text-muted)', margin: 0, lineHeight: 1.35 }}>
+                        {choice.description}
+                      </p>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+
+            {/* Rates Estimate Note */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                marginTop: 10,
+                padding: '6px 10px',
+                background: 'rgba(59, 130, 246, 0.08)',
+                border: '1px solid rgba(59, 130, 246, 0.2)',
+                borderRadius: 4,
+                fontSize: '0.72rem',
+                color: '#93c5fd',
+              }}
+            >
+              <Info size={13} style={{ flexShrink: 0 }} />
+              <span>Estimate based on rates as of Oct 2026</span>
+            </div>
+          </div>
+
           <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
             <button
               type="button"
@@ -757,6 +955,102 @@ export default function Groups() {
             </button>
             <button type="submit" className="btn btn-primary" disabled={creating}>
               {creating ? 'Creating Group...' : 'Create Group'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+
+      {/* Modal: Set Tax Domain for Existing Group */}
+      <Modal
+        isOpen={Boolean(domainModalGroup)}
+        onClose={() => setDomainModalGroup(null)}
+        title={`Set Tax Domain — ${domainModalGroup?.name || ''}`}
+      >
+        <form onSubmit={handleSetGroupDomain}>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: 14 }}>
+            Choose a tax domain for this circle. Once debts are recorded within this group,
+            the tax domain will be permanently locked.
+          </p>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
+            {TAX_DOMAIN_CHOICES.map((choice) => {
+              const IconComponent = choice.icon;
+              const isSelected = selectedDomainForGroup === choice.key;
+              return (
+                <label
+                  key={choice.key}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 12,
+                    padding: '10px 12px',
+                    borderRadius: 6,
+                    border: isSelected
+                      ? `1.5px solid ${choice.accentColor}`
+                      : '1px solid rgba(255, 255, 255, 0.1)',
+                    background: isSelected
+                      ? 'rgba(255, 255, 255, 0.05)'
+                      : 'rgba(0, 0, 0, 0.2)',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="setDomainOption"
+                    value={choice.key}
+                    checked={isSelected}
+                    onChange={() => setSelectedDomainForGroup(choice.key)}
+                    style={{ marginTop: 3, accentColor: choice.accentColor }}
+                    required
+                  />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                      <IconComponent size={14} style={{ color: choice.accentColor }} />
+                      <span style={{ fontSize: '0.88rem', fontWeight: 700, color: isSelected ? 'white' : '#cbd5e1' }}>
+                        {choice.label}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: '0.74rem', color: 'var(--text-muted)', margin: 0, lineHeight: 1.35 }}>
+                      {choice.description}
+                    </p>
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+
+          {/* Rates Estimate Note */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              marginBottom: 20,
+              padding: '6px 10px',
+              background: 'rgba(59, 130, 246, 0.08)',
+              border: '1px solid rgba(59, 130, 246, 0.2)',
+              borderRadius: 4,
+              fontSize: '0.72rem',
+              color: '#93c5fd',
+            }}
+          >
+            <Info size={13} style={{ flexShrink: 0 }} />
+            <span>Estimate based on rates as of Oct 2026</span>
+          </div>
+
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setDomainModalGroup(null)}
+              disabled={settingDomain}
+            >
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-primary" disabled={settingDomain}>
+              {settingDomain ? 'Saving...' : 'Set Tax Domain'}
             </button>
           </div>
         </form>

@@ -36,6 +36,13 @@ import type {
   ContagionResult,
   Notification,
   MonthRecord,
+  TaxDomain,
+  TaxInputDef,
+  TaxTypeDef,
+  TaxRulesResponse,
+  TaxPreview,
+  TaxBreakupItem,
+  TaxSummary,
 } from '../types';
 
 export type {
@@ -63,6 +70,13 @@ export type {
   ContagionResult,
   Notification,
   MonthRecord,
+  TaxDomain,
+  TaxInputDef,
+  TaxTypeDef,
+  TaxRulesResponse,
+  TaxPreview,
+  TaxBreakupItem,
+  TaxSummary,
 };
 
 
@@ -162,9 +176,29 @@ export interface GroupDetailResponse {
   members: Membership[];
 }
 
+
+// ── Tax Domain & Calculation Contract (§2 Shared Contract) ──────────────────
+
+export interface TaxDomainItem {
+  key: TaxDomain;
+  label: string;
+  description: string;
+}
+
+export interface TaxPreviewRequest {
+  taxType: string;
+  baseAmount: number;
+  taxInputs?: Record<string, any>;
+}
+
+export interface SetGroupDomainRequest {
+  domain: TaxDomain;
+}
+
 export interface CreateGroupRequest {
   name: string;
   type?: GroupType;
+  domain?: TaxDomain;
 }
 
 export interface JoinGroupRequest {
@@ -216,7 +250,10 @@ export interface DebtResponse {
 export interface CreateDebtRequest {
   debtorId: string;
   creditorId: string;
-  amount: number;
+  amount?: number;
+  baseAmount?: number;
+  taxType?: string;
+  taxInputs?: Record<string, any>;
   dueDate?: string;
   note?: string;
 }
@@ -622,6 +659,7 @@ export interface Api {
     updateRole(groupId: string, merchantId: string, role: Role): Promise<{ success: boolean; membership: any }>;
     removeMember(groupId: string, merchantId: string): Promise<{ success: boolean; message: string }>;
     rotateInviteCode(groupId: string): Promise<InviteResponse>;
+    setDomain(id: string, domain: TaxDomain): Promise<GroupResponse>;
   };
 
   // Slice A: Debts & Invoicing
@@ -687,5 +725,14 @@ export interface Api {
     markAllRead(): Promise<MarkAllReadResponse>;
     getPreferences(): Promise<NotificationPreferencesResponse>;
     updatePreferences(data: Partial<Omit<NotificationPreferences, 'merchantId'>>): Promise<NotificationPreferencesResponse>;
+  };
+
+  // Tax Domain & Calculations (§2 Shared Contract)
+  tax: {
+    getDomains(): Promise<TaxDomainItem[]>;
+    getRules(domain?: TaxDomain): Promise<TaxRulesResponse>;
+    preview(data: TaxPreviewRequest): Promise<TaxPreview>;
+    setGroupDomain(groupId: string, domain: TaxDomain): Promise<GroupResponse>;
+    summary?(): Promise<TaxSummary>;
   };
 }

@@ -151,3 +151,4 @@ export const TaxBadge: React.FC<TaxBadgeProps> = ({
 };
 
 export default TaxBadge;
+

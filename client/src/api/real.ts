@@ -80,6 +80,12 @@ import type {
   RiskTrendResponse,
   NotificationPreferences,
   NotificationPreferencesResponse,
+  TaxDomain,
+  TaxDomainItem,
+  TaxPreviewRequest,
+  TaxRulesResponse,
+  TaxPreview,
+  TaxSummary,
 } from './contract';
 
 export const realApi: Api = {
@@ -153,6 +159,10 @@ export const realApi: Api = {
     },
     rotateInviteCode: async (groupId: string): Promise<InviteResponse> => {
       const res = await apiClient.post(`/groups/${groupId}/invite-code/rotate`);
+      return res.data;
+    },
+    setDomain: async (id: string, domain: TaxDomain): Promise<GroupResponse> => {
+      const res = await apiClient.patch(`/groups/${id}/domain`, { domain });
       return res.data;
     },
   },
@@ -359,6 +369,29 @@ export const realApi: Api = {
       data: Partial<Omit<NotificationPreferences, 'merchantId'>>
     ): Promise<NotificationPreferencesResponse> => {
       const res = await apiClient.patch('/notifications/preferences', data);
+      return res.data;
+    },
+  },
+
+  tax: {
+    getDomains: async (): Promise<TaxDomainItem[]> => {
+      const res = await apiClient.get('/tax/domains');
+      return res.data;
+    },
+    getRules: async (domain?: TaxDomain): Promise<TaxRulesResponse> => {
+      const res = await apiClient.get('/tax/rules', { params: domain ? { domain } : undefined });
+      return res.data;
+    },
+    preview: async (data: TaxPreviewRequest): Promise<TaxPreview> => {
+      const res = await apiClient.post('/tax/preview', data);
+      return res.data;
+    },
+    setGroupDomain: async (groupId: string, domain: TaxDomain): Promise<GroupResponse> => {
+      const res = await apiClient.patch(`/groups/${groupId}/domain`, { domain });
+      return res.data;
+    },
+    summary: async (): Promise<TaxSummary> => {
+      const res = await apiClient.get('/tax/summary');
       return res.data;
     },
   },

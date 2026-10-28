@@ -11,6 +11,7 @@
  *   - rotate invite code
  */
 
+import { taxMock } from './tax.mock.ts';
 import type {
   GroupsResponse,
   GroupDetailResponse,
@@ -23,6 +24,7 @@ import type {
   Group,
   Membership,
   Role,
+  TaxDomain,
 } from '../contract';
 
 export interface EnrichedMembership extends Membership {
@@ -33,11 +35,12 @@ export interface EnrichedMembership extends Membership {
   };
 }
 
-let mockGroups: (Group & { role?: Role })[] = [
+export let mockGroups: (Group & { role?: Role })[] = [
   {
     _id: 'grp-1',
     name: 'Crawford Market Traders',
     type: 'market',
+    domain: 'gst',
     ownerId: 'Wholesale_A',
     inviteCode: 'CRAWFORD2026',
     role: 'owner',
@@ -47,6 +50,7 @@ let mockGroups: (Group & { role?: Role })[] = [
     _id: 'grp-2',
     name: 'Maharashtra Agro Supply',
     type: 'supply_chain',
+    domain: 'none',
     ownerId: 'Supplier_C',
     inviteCode: 'AGRO9988',
     role: 'admin',
@@ -56,6 +60,7 @@ let mockGroups: (Group & { role?: Role })[] = [
     _id: 'grp-3',
     name: 'South Mumbai Retail Network',
     type: 'market',
+    domain: 'none',
     ownerId: 'Vendor_D',
     inviteCode: 'MUMBAI44',
     role: 'member',
@@ -147,6 +152,7 @@ export const groupsMock = {
       _id: `grp-${Date.now()}`,
       name: data.name,
       type: data.type || 'market',
+      domain: data.domain || 'none',
       ownerId: 'Wholesale_A',
       inviteCode: `INV-${Math.floor(1000 + Math.random() * 9000)}`,
       role: 'owner',
@@ -217,5 +223,12 @@ export const groupsMock = {
 
   invite: async (id: string, _data: InviteGroupRequest): Promise<InviteResponse> => {
     return groupsMock.rotateInviteCode(id);
+  },
+
+  setDomain: async (id: string, domain: TaxDomain): Promise<GroupResponse> => {
+    const group = mockGroups.find((g) => g._id === id);
+    if (!group) throw new Error(`Group ${id} not found`);
+    // Delegate to taxMock logic
+    return taxMock.setGroupDomain(id, domain);
   },
 };

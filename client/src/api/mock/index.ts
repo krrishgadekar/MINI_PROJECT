@@ -11,6 +11,7 @@ import { settlementMock } from './settlement.mock';
 import { riskMock } from './risk.mock';
 import { notificationsMock } from './notifications.mock';
 import { auditMock } from './audit.mock';
+import { taxMock } from './tax.mock';
 import type { Api, LoginRequest, RegisterRequest, MeResponse, AuthResponse } from '../contract';
 
 export { groupsMock } from './groups.mock';
@@ -20,6 +21,7 @@ export { settlementMock } from './settlement.mock';
 export { riskMock } from './risk.mock';
 export { notificationsMock } from './notifications.mock';
 export { auditMock } from './audit.mock';
+export { taxMock } from './tax.mock';
 
 const mockAuth = {
   login: async (data: LoginRequest): Promise<AuthResponse> => ({
@@ -94,4 +96,5 @@ export const mockApi: Api = {
   risk: riskMock,
   notifications: notificationsMock,
   audit: auditMock,
+  tax: taxMock,
 };

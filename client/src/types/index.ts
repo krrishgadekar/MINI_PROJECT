@@ -146,11 +146,75 @@ export interface GraphData {
 export type Role = 'owner' | 'admin' | 'member';
 
 export type GroupType = 'market' | 'supply_chain' | 'friends' | 'other';
+// ---------------------------------------------------------------------------
+// Tax Domain Types (§2 Shared Contract)
+// ---------------------------------------------------------------------------
+
+export type TaxDomain = 'none' | 'income' | 'gst' | 'customs' | 'property' | 'vehicle';
+
+export interface TaxInputDef {
+  name: string;
+  label: string;
+  type: 'select' | 'number' | 'boolean';
+  options?: (number | string)[];
+  default?: number | string | boolean;
+}
+
+export interface TaxTypeDef {
+  key: string;
+  label: string;
+  effect: 'add' | 'deduct';
+  note: string;
+  legalRef: string;
+  inputs: TaxInputDef[];
+}
+
+export interface TaxRulesResponse {
+  domain: TaxDomain;
+  ruleVersion: string;
+  types: TaxTypeDef[];
+}
+
+export interface TaxBreakupItem {
+  label: string;
+  rate?: number;
+  amount: number;
+}
+
+export interface TaxPreview {
+  baseAmount: number;
+  taxAmount: number;
+  effect: 'add' | 'deduct';
+  payable: number;
+  taxRate: number;
+  breakup: TaxBreakupItem[];
+  legalRef: string;
+  ruleVersion: string;
+}
+
+export interface TaxSummaryTotalItem {
+  taxType: string;
+  label: string;
+  count: number;
+  baseTotal: number;
+  taxTotal: number;
+  effect: 'add' | 'deduct';
+}
+
+export interface TaxSummary {
+  domain: TaxDomain;
+  totals: TaxSummaryTotalItem[];
+  grandBase: number;
+  grandTax: number;
+  grandPayable: number;
+}
+
 
 export interface Group {
   _id: string;
   name: string;
   type: GroupType;
+  domain?: TaxDomain;
   ownerId: string;
   inviteCode: string;
   createdAt?: string;
@@ -182,6 +246,14 @@ export interface Debt {
   version: number;
   createdAt?: string;
   updatedAt?: string;
+  baseAmount?: number;
+  taxType?: string;
+  taxEffect?: 'add' | 'deduct';
+  taxAmount?: number;
+  taxRate?: number;
+  taxBreakup?: TaxBreakupItem[];
+  taxInputs?: Record<string, any>;
+  taxRuleVersion?: string;
 }
 
 export type PaymentKind = 'partial' | 'settlement' | 'netting';

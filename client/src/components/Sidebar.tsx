@@ -18,6 +18,7 @@ import { useUiStore } from '../store/useUiStore';
 import { useNotifications } from '../hooks/useNotifications';
 import { useAuth } from '../state/AuthProvider';
 import { useGroup } from '../state/GroupProvider';
+import { TaxBadge } from './tax/TaxBadge';
 
 export const navItems = [
   { to: '/', code: '01', icon: LayoutDashboard, label: 'Overview' },
@@ -130,20 +131,25 @@ export default function Sidebar() {
             background: '#faf7f2',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
-            <Layers size={12} style={{ color: '#0d2247' }} />
-            <span
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: '0.65rem',
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
-                color: 'var(--text-muted)',
-              }}
-            >
-              MARKET CIRCLE
-            </span>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Layers size={12} style={{ color: '#0d2247' }} />
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.65rem',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                  color: 'var(--text-muted)',
+                }}
+              >
+                MARKET CIRCLE
+              </span>
+            </div>
+            {activeGroup && (
+              <TaxBadge domain={activeGroup.domain || 'none'} size="xs" />
+            )}
           </div>
           <select
             value={activeGroupId ?? ''}

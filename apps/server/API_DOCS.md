@@ -105,11 +105,20 @@ Removes a member from the group. Can be performed by admins/owners, or by a memb
 Generates a new random invite code for the group, invalidating the previous code. Requires `admin` or `owner` role.
 - **Returns**: `{ success: true, inviteCode: string }`
 
+### `PATCH /groups/:id/domain`
+Sets or updates the tax domain for a group. Allowed only when the group's current domain is `'none'` and the group has zero existing debts. Requires `admin` or `owner` role.
+- **Headers**: `Authorization: Bearer <token>`, `X-Group-Id: <groupId>`
+- **Body**: `{ "domain": "gst" | "income" | "customs" | "property" | "vehicle" }`
+- **Returns**: `{ success: true, group: { _id, name, type, domain, ownerId, inviteCode, createdAt } }`
+- **Errors**: `409 DOMAIN_LOCKED` if the group already has debts or domain is already set; `403 FORBIDDEN_GROUP` for regular members; `400 VALIDATION` on invalid domain.
+- **Audit & Realtime**: Logs `GROUP_DOMAIN_UPDATED` audit entry; emits `group:updated` socket event to `group:<id>`.
+
 ---
 
 ## 1.2 Tenancy Header Requirement (`X-Group-Id`)
 The following routes enforce strict tenant scoping via `requireGroup` middleware:
 - `/api/debts` (listing, creation, updates)
+- `/api/tax` (domains, rules, preview, summary)
 - `/api/merchants` (scoping to group members)
 - `/api/settlement` (`/`, `/cycles`, `/net-cycle`, `/confirm/:batchId`)
 - `/api/risk/group`, `/api/risk/merchant/:id`, `/api/risk/recompute`, `/api/risk/contagion`
@@ -139,8 +148,18 @@ Fetches all active debts.
 
 ### `POST /debts`
 Creates a new debt edge.
-- **Body**: `{ "debtorId": "<mongo_id>", "creditorId": "<mongo_id>", "amount": 1500 }`
-- **Returns**: `{ success: true, debt: {...} }`
+- **Headers**: `Authorization: Bearer <token>`, `X-Group-Id: <groupId>`
+- **Body (Legacy Group - domain: 'none')**:
+  `{ "debtorId": "<mongo_id>", "creditorId": "<mongo_id>", "amount": 1500, "dueDate"?: string, "note"?: string }`
+  - In a group with domain `'none'`, client sends `amount`. `baseAmount` equals `amount`, `taxAmount` is 0.
+  - Sending tax fields (`taxType`, `taxInputs`) to a `'none'` group returns `400 DOMAIN_REQUIRED`.
+- **Body (Tax Group - domain: 'gst' | 'income' | 'customs' | 'property' | 'vehicle')**:
+  `{ "debtorId": "<mongo_id>", "creditorId": "<mongo_id>", "baseAmount": 10000, "taxType": "gst.intra", "taxInputs"?: { "gstRate": 18 }, "dueDate"?: string, "note"?: string }`
+  - In a tax group, `baseAmount` and `taxType` are required. The server IGNORES any client-provided `amount` and computes payable as `round2(baseAmount ± taxAmount)`.
+  - Automatically calculates and stores `baseAmount`, `taxType`, `taxEffect`, `taxAmount`, `taxRate`, `taxBreakup`, `taxInputs`, `taxRuleVersion`, and sets `amount` and `originalAmount` to `payable`.
+  - Audit log metadata and `debt:created` socket payload include full tax calculation metadata.
+- **Returns**: `{ success: true, debt: { _id, groupId, debtorId, creditorId, amount, originalAmount, baseAmount, taxType, taxEffect, taxAmount, taxRate, taxBreakup, taxInputs, taxRuleVersion, status: 'pending', ... } }`
+- **Errors**: `400 INVALID_TAX_TYPE`, `400 DOMAIN_REQUIRED`, `400 VALIDATION`.
 
 ### `PATCH /debts/:id`
 Updates the amount of an existing active debt.
@@ -930,3 +949,108 @@ To protect browser performance against event cascades and network bursts:
 | `notification:new` | `merchant:<id>` | Server -> Client | `{ notification: Notification }` | Realtime notification delivered to recipient |
 
 
+
+---
+
+## 9. Tax Calculation Engine (`/api/tax`)
+Tenancy-scoped tax calculation, official Indian and Maharashtra state rate slabs (as of October 2026), and transaction previews.
+All tax endpoints require authentication and an active `X-Group-Id` header.
+
+### `GET /tax/domains`
+Returns all available tax domains with labels and descriptions.
+- **Headers**: `Authorization: Bearer <token>`, `X-Group-Id: <groupId>`
+- **Returns (200)**:
+```json
+[
+  { "key": "income", "label": "Income Tax (TDS)", "description": "Tax Deducted at Source under Income-tax Act 2025 on contracts, professional fees and brokerage." },
+  { "key": "gst", "label": "Goods & Services Tax (GST)", "description": "Intra-state (CGST + SGST) and inter-state (IGST) standard tax slabs (0%, 5%, 18%, 40%)." },
+  { "key": "customs", "label": "Customs (Import & Export)", "description": "Customs duty on imports (BCD + SWS + IGST) and export tariff lines with zero-rated IGST." },
+  { "key": "property", "label": "Property & Stamp Duty", "description": "Maharashtra Stamp Duty (Mumbai & rest of MH with woman buyer concession) and capped registration fee." },
+  { "key": "vehicle", "label": "Motor Vehicle Tax", "description": "Maharashtra one-time road tax slabs across Petrol, Diesel, CNG, EV (exempt) and corporate registrations." }
+]
+```
+
+### `GET /tax/rules`
+Fetches official tax type definitions, legal references, and input schemas for a tax domain. Defaults to the active group's domain if `domain` query parameter is omitted.
+- **Headers**: `Authorization: Bearer <token>`, `X-Group-Id: <groupId>`
+- **Query Params (Optional)**: `?domain=gst|income|customs|property|vehicle`
+- **Returns (200)**:
+```json
+{
+  "domain": "gst",
+  "ruleVersion": "FY2026-27",
+  "types": [
+    {
+      "key": "gst.intra",
+      "label": "Intra-State GST (CGST + SGST)",
+      "effect": "add",
+      "note": "Tax split equally into Central GST (rate/2) and State GST (rate/2).",
+      "legalRef": "CGST/SGST Acts; GST Council 56th meeting, rates from 22 Sep 2025 (5%, 18%, 40% and nil)",
+      "inputs": [
+        {
+          "name": "gstRate",
+          "label": "GST Slab Rate (%)",
+          "type": "select",
+          "options": [0, 5, 18, 40],
+          "default": 18
+        }
+      ]
+    }
+  ]
+}
+```
+
+### `POST /tax/preview`
+Computes exact tax, component breakup, and final payable amount without database modification. Uses the active group's domain.
+- **Headers**: `Authorization: Bearer <token>`, `X-Group-Id: <groupId>`
+- **Body**:
+```json
+{
+  "taxType": "gst.intra",
+  "baseAmount": 10000,
+  "taxInputs": { "gstRate": 18 }
+}
+```
+- **Returns (200)**:
+```json
+{
+  "baseAmount": 10000,
+  "taxAmount": 1800,
+  "effect": "add",
+  "payable": 11800,
+  "taxRate": 18,
+  "breakup": [
+    { "label": "CGST", "rate": 9, "amount": 900 },
+    { "label": "SGST", "rate": 9, "amount": 900 }
+  ],
+  "legalRef": "CGST/SGST Acts; GST Council 56th meeting, rates from 22 Sep 2025 (5%, 18%, 40% and nil)",
+  "ruleVersion": "FY2026-27"
+}
+```
+- **Errors**: `400 INVALID_TAX_TYPE` if taxType is invalid for active group's domain; `400 VALIDATION` on invalid inputs or negative baseAmount; `403 FORBIDDEN_GROUP` for outsiders.
+
+### `GET /tax/summary`
+Aggregates tax totals grouped by taxType and grand totals across the tenancy.
+- **Headers**: `Authorization: Bearer <token>`, `X-Group-Id: <groupId>`
+- **Permissions**:
+  - `admin` / `owner`: Whole group aggregate across all non-cancelled tax debts.
+  - `member`: Scoped only to debts where caller is either debtor or creditor.
+- **Returns (200)**:
+```json
+{
+  "domain": "gst",
+  "totals": [
+    {
+      "taxType": "gst.intra",
+      "label": "Intra-State GST (CGST + SGST)",
+      "count": 1,
+      "baseTotal": 10000,
+      "taxTotal": 1800,
+      "effect": "add"
+    }
+  ],
+  "grandBase": 10000,
+  "grandTax": 1800,
+  "grandPayable": 11800
+}
+```

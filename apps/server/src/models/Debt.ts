@@ -2,6 +2,12 @@ import { Schema, model, Document, Types } from 'mongoose';
 
 export type DebtStatus = 'active' | 'settled' | 'netted' | 'pending' | 'disputed' | 'cancelled';
 
+export interface ITaxBreakupItem {
+  label: string;
+  rate?: number;
+  amount: number;
+}
+
 export interface IDebt extends Document {
   groupId: Types.ObjectId;  // required for new docs (group-scoped tenancy)
   debtorId: Types.ObjectId;
@@ -16,6 +22,15 @@ export interface IDebt extends Document {
   version: number;          // explicit numeric version field (optimistic locking)
   createdAt: Date;
   updatedAt: Date;
+  // Tax fields (§2.1)
+  baseAmount?: number;
+  taxType?: string;
+  taxEffect?: 'add' | 'deduct';
+  taxAmount: number;
+  taxRate?: number;
+  taxBreakup: ITaxBreakupItem[];
+  taxInputs?: Record<string, any>;
+  taxRuleVersion?: string;
 }
 
 const DebtSchema = new Schema<IDebt>(
@@ -35,6 +50,24 @@ const DebtSchema = new Schema<IDebt>(
     confirmedBy: { type: Schema.Types.ObjectId, ref: 'Merchant', default: null },
     createdBy: { type: Schema.Types.ObjectId, ref: 'Merchant', default: null },
     version: { type: Number, default: 0 },   // explicit CAS version (not Mongoose __v)
+    // Tax fields (§2.1)
+    baseAmount: { type: Number },
+    taxType: { type: String },
+    taxEffect: { type: String, enum: ['add', 'deduct'] },
+    taxAmount: { type: Number, default: 0, min: 0 },
+    taxRate: { type: Number },
+    taxBreakup: {
+      type: [
+        {
+          label: { type: String, required: true },
+          rate: { type: Number },
+          amount: { type: Number, required: true },
+        },
+      ],
+      default: [],
+    },
+    taxInputs: { type: Schema.Types.Mixed },
+    taxRuleVersion: { type: String },
   },
   {
     timestamps: true,
@@ -42,6 +75,42 @@ const DebtSchema = new Schema<IDebt>(
     versionKey: false,
   },
 );
+
+/**
+ * Migration helper: treats missing baseAmount as amount when reading (§2.1)
+ */
+export function ensureBaseAmount<T extends { amount: number; baseAmount?: number }>(
+  debt: T,
+): T & { baseAmount: number } {
+  if (debt && (debt.baseAmount === undefined || debt.baseAmount === null)) {
+    debt.baseAmount = debt.amount;
+  }
+  return debt as T & { baseAmount: number };
+}
+
+DebtSchema.post('init', function (doc) {
+  if (doc.baseAmount === undefined || doc.baseAmount === null) {
+    doc.baseAmount = doc.amount;
+  }
+});
+
+DebtSchema.set('toJSON', {
+  transform: (_doc, ret) => {
+    if (ret.baseAmount === undefined || ret.baseAmount === null) {
+      ret.baseAmount = ret.amount;
+    }
+    return ret;
+  },
+});
+
+DebtSchema.set('toObject', {
+  transform: (_doc, ret) => {
+    if (ret.baseAmount === undefined || ret.baseAmount === null) {
+      ret.baseAmount = ret.amount;
+    }
+    return ret;
+  },
+});
 
 // Compound index for fast lookup of all debts between two merchants
 DebtSchema.index({ debtorId: 1, creditorId: 1 });

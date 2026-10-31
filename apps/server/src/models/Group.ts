@@ -4,10 +4,12 @@ import { Schema, model, Document, Types } from 'mongoose';
 // (not imported from client to keep server package self-contained)
 export type GroupTypeEnum = 'market' | 'supply_chain' | 'friends' | 'other';
 export type MemberRole = 'owner' | 'admin' | 'member';
+export type TaxDomain = 'none' | 'income' | 'gst' | 'customs' | 'property' | 'vehicle';
 
 export interface IGroup extends Document {
   name: string;
   type: GroupTypeEnum;
+  domain: TaxDomain;
   ownerId: Types.ObjectId;
   inviteCode: string;
   createdAt: Date;
@@ -29,6 +31,11 @@ const GroupSchema = new Schema<IGroup>(
       type: String,
       enum: ['market', 'supply_chain', 'friends', 'other'],
       default: 'other',
+    },
+    domain: {
+      type: String,
+      enum: ['none', 'income', 'gst', 'customs', 'property', 'vehicle'],
+      default: 'none',
     },
     ownerId: { type: Schema.Types.ObjectId, ref: 'Merchant', required: true },
     inviteCode: { type: String, required: true, unique: true, uppercase: true },

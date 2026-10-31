@@ -3,10 +3,13 @@ import { z } from 'zod';
 import mongoose from 'mongoose';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { GroupRequest } from '../middleware/group.middleware';
-import { Group, Membership, IGroup } from '../models/Group';
+import { Group, Membership, IGroup, TaxDomain } from '../models/Group';
+import { Debt } from '../models/Debt';
 import { Merchant } from '../models/Merchant';
 import { AppError } from '../utils/errors';
 import { parsePaginationParams } from '../utils/paginate';
+import { audit } from '../utils/audit';
+import { emitToGroup } from '../realtime/socket';
 import crypto from 'crypto';
 
 // ── Validation schemas ────────────────────────────────────────────────────────
@@ -14,6 +17,7 @@ import crypto from 'crypto';
 const CreateGroupSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   type: z.enum(['market', 'supply_chain', 'friends', 'other']).default('other'),
+  domain: z.enum(['none', 'income', 'gst', 'customs', 'property', 'vehicle']).optional().default('none'),
 });
 
 const JoinGroupSchema = z.object({
@@ -53,7 +57,7 @@ export const createGroup = async (
       return;
     }
 
-    const { name, type } = parsed.data;
+    const { name, type, domain } = parsed.data;
     const merchantId = req.merchant!._id as mongoose.Types.ObjectId;
 
     // Generate unique invite code (retry up to 5 times on collision)
@@ -67,6 +71,7 @@ export const createGroup = async (
     const group = await Group.create({
       name,
       type,
+      domain: domain || 'none',
       ownerId: merchantId,
       inviteCode,
     });
@@ -97,7 +102,7 @@ export const listGroups = async (
     const merchantId = req.merchant!._id;
 
     const memberships = await Membership.find({ merchantId })
-      .populate<{ groupId: IGroup }>('groupId', 'name type ownerId inviteCode createdAt');
+      .populate<{ groupId: IGroup }>('groupId', 'name type domain ownerId inviteCode createdAt');
 
     const groups = memberships.map((m) => {
       const g = m.groupId as unknown as IGroup;
@@ -105,6 +110,7 @@ export const listGroups = async (
         _id: g._id,
         name: g.name,
         type: g.type,
+        domain: g.domain || 'none',
         ownerId: g.ownerId,
         inviteCode: g.inviteCode,
         createdAt: g.createdAt,
@@ -222,6 +228,7 @@ export const getGroupById = async (
         _id: group._id.toString(),
         name: group.name,
         type: group.type,
+        domain: group.domain || 'none',
         ownerId: group.ownerId.toString(),
         inviteCode: group.inviteCode,
         createdAt: group.createdAt.toISOString(),
@@ -479,6 +486,77 @@ export const rotateInviteCode = async (
     await group.save();
 
     res.json({ success: true, inviteCode: newCode });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * PATCH /api/groups/:id/domain (§2.2 & §3)
+ * Sets the tax domain for a group. Admin/Owner only.
+ * Allowed only when current domain is 'none' and the group has zero debts, else 409 DOMAIN_LOCKED.
+ * Audits the change and emits a group-room event 'group:updated'.
+ */
+export const setGroupDomain = async (
+  req: GroupRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) {
+      throw new AppError(400, 'VALIDATION', 'Invalid group ID format.');
+    }
+
+    const { domain } = req.body;
+    const allowedDomains: TaxDomain[] = ['none', 'income', 'gst', 'customs', 'property', 'vehicle'];
+    if (!domain || !allowedDomains.includes(domain)) {
+      throw new AppError(
+        400,
+        'VALIDATION',
+        `Invalid domain '${domain}'. Allowed: ${allowedDomains.join(', ')}`,
+      );
+    }
+
+    const group = await Group.findById(id);
+    if (!group) {
+      throw new AppError(404, 'NOT_FOUND', 'Group not found.');
+    }
+
+    // 409 if domain is already set and not 'none'
+    if (group.domain && group.domain !== 'none') {
+      throw new AppError(
+        409,
+        'DOMAIN_LOCKED',
+        'Group domain has already been configured.',
+      );
+    }
+
+    // 409 DOMAIN_LOCKED if the group already has debts
+    const debtCount = await Debt.countDocuments({ groupId: group._id });
+    if (debtCount > 0) {
+      throw new AppError(
+        409,
+        'DOMAIN_LOCKED',
+        'Cannot change domain on a group with existing debts.',
+      );
+    }
+
+    const previousDomain = group.domain || 'none';
+    group.domain = domain;
+    await group.save();
+
+    // Audit the domain change
+    await audit(req, 'GROUP_DOMAIN_UPDATED', 'Group', group._id, {
+      previousDomain,
+      newDomain: domain,
+    });
+
+    // Emit group-room event 'group:updated'
+    emitToGroup(group._id.toString(), 'group:updated', { group });
+
+    res.json({ success: true, group });
   } catch (error) {
     next(error);
   }

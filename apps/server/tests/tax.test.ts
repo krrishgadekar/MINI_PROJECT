@@ -8,6 +8,10 @@ import { applyTax, round2, TAX_RULE_VERSION, TAX_DOMAINS } from '../src/tax';
 import { Debt, ensureBaseAmount } from '../src/models/Debt';
 import { AuditLog } from '../src/models/AuditLog';
 import { emitToGroup } from '../src/realtime/socket';
+import axios from 'axios';
+
+jest.mock('axios');
+const mockedAxios = axios as jest.Mocked<typeof axios>;
 
 jest.mock('../src/realtime/socket', () => ({
   getIO: () => ({
@@ -676,6 +680,526 @@ describe('Tax API Endpoints, Groups, Debts & Domain Locking', () => {
       expect(noneRes.body.domain).toBe('none');
       expect(noneRes.body.totals).toEqual([]);
       expect(noneRes.body.grandBase).toBe(0);
+    });
+  });
+
+  describe('PATCH /api/debts/:id — Tax Debt Edit', () => {
+    let incomeGroupId: string;
+    let incomeGroupInviteCode: string;
+    let taxDebtId: string;
+
+    beforeAll(async () => {
+      // Create income group
+      const gRes = await request(app)
+        .post('/api/groups')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ name: 'Income Edit Group', type: 'market', domain: 'income' });
+      incomeGroupId = gRes.body.group._id;
+      incomeGroupInviteCode = gRes.body.group.inviteCode;
+
+      // Join member
+      await request(app)
+        .post('/api/groups/join')
+        .set('Authorization', `Bearer ${memberToken}`)
+        .send({ inviteCode: incomeGroupInviteCode });
+
+      // Create a tax debt (TDS professional 10%)
+      const dRes = await request(app)
+        .post('/api/debts')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Group-Id', incomeGroupId)
+        .send({
+          debtorId: memberId,
+          creditorId: ownerId,
+          baseAmount: 100000,
+          taxType: 'income.tds_professional',
+        });
+      taxDebtId = dRes.body.debt._id;
+    });
+
+    it('recomputes tax fields when baseAmount changes in a tax group', async () => {
+      const res = await request(app)
+        .patch(`/api/debts/${taxDebtId}`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Group-Id', incomeGroupId)
+        .send({ baseAmount: 200000 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      const debt = res.body.debt;
+      // TDS professional 10%: payable = 200000 - 20000 = 180000
+      expect(debt.baseAmount).toBe(200000);
+      expect(debt.taxAmount).toBe(20000);
+      expect(debt.amount).toBe(180000);
+      expect(debt.taxType).toBe('income.tds_professional');
+      expect(debt.taxEffect).toBe('deduct');
+    });
+
+    it('blocks tax debt edit when payments exist (409)', async () => {
+      // Create a fresh debt and confirm it, then record a payment
+      const dRes = await request(app)
+        .post('/api/debts')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Group-Id', incomeGroupId)
+        .send({
+          debtorId: memberId,
+          creditorId: ownerId,
+          baseAmount: 50000,
+          taxType: 'income.tds_professional',
+        });
+      const paidDebtId = dRes.body.debt._id;
+
+      // Confirm it
+      await request(app)
+        .post(`/api/debts/${paidDebtId}/confirm`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .set('X-Group-Id', incomeGroupId);
+
+      // Record a payment (partial)
+      await request(app)
+        .post(`/api/debts/${paidDebtId}/payments`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .set('X-Group-Id', incomeGroupId)
+        .send({ amount: 5000 });
+
+      // Attempt to update
+      const res = await request(app)
+        .patch(`/api/debts/${paidDebtId}`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Group-Id', incomeGroupId)
+        .send({ baseAmount: 60000 });
+
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe('VALIDATION');
+    });
+
+    it('legacy none-group PATCH still works with amount field', async () => {
+      // Create a debt in noneGroupId
+      const dRes = await request(app)
+        .post('/api/debts')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Group-Id', noneGroupId)
+        .send({
+          debtorId: memberId,
+          creditorId: ownerId,
+          amount: 5000,
+        });
+      const legacyDebtId = dRes.body.debt._id;
+
+      const res = await request(app)
+        .patch(`/api/debts/${legacyDebtId}`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Group-Id', noneGroupId)
+        .send({ amount: 7500 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.debt.amount).toBe(7500);
+    });
+  });
+
+  describe('Payments on Tax Debts — Partial Payment Verification', () => {
+    let incomeGroup2Id: string;
+    let tdsDebtId: string;
+
+    beforeAll(async () => {
+      // Create income group 2
+      const gRes = await request(app)
+        .post('/api/groups')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ name: 'Income Payment Group', type: 'market', domain: 'income' });
+      incomeGroup2Id = gRes.body.group._id;
+      const inv = gRes.body.group.inviteCode;
+
+      await request(app)
+        .post('/api/groups/join')
+        .set('Authorization', `Bearer ${memberToken}`)
+        .send({ inviteCode: inv });
+
+      // Create TDS professional debt: base=100000, payable=90000
+      const dRes = await request(app)
+        .post('/api/debts')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Group-Id', incomeGroup2Id)
+        .send({
+          debtorId: memberId,
+          creditorId: ownerId,
+          baseAmount: 100000,
+          taxType: 'income.tds_professional',
+        });
+      tdsDebtId = dRes.body.debt._id;
+      expect(dRes.body.debt.amount).toBe(90000);
+
+      // Confirm the debt
+      await request(app)
+        .post(`/api/debts/${tdsDebtId}/confirm`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .set('X-Group-Id', incomeGroup2Id);
+    });
+
+    it('partial payment reduces amount but preserves baseAmount and taxAmount', async () => {
+      const res = await request(app)
+        .post(`/api/debts/${tdsDebtId}/payments`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .set('X-Group-Id', incomeGroup2Id)
+        .send({ amount: 40000 });
+
+      expect(res.status).toBe(201);
+      expect(res.body.debt.amount).toBe(50000); // 90000 - 40000
+      expect(res.body.debt.baseAmount).toBe(100000); // unchanged
+      expect(res.body.debt.taxAmount).toBe(10000); // unchanged
+      expect(res.body.debt.status).toBe('active');
+    });
+
+    it('final payment settles the debt at zero', async () => {
+      const res = await request(app)
+        .post(`/api/debts/${tdsDebtId}/payments`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .set('X-Group-Id', incomeGroup2Id)
+        .send({ amount: 50000 });
+
+      expect(res.status).toBe(201);
+      expect(res.body.debt.amount).toBe(0);
+      expect(res.body.debt.status).toBe('settled');
+      expect(res.body.debt.baseAmount).toBe(100000); // still unchanged
+      expect(res.body.debt.taxAmount).toBe(10000); // still unchanged
+    });
+  });
+
+  describe('GET /api/tax/summary — Strict Status Exclusion', () => {
+    let summaryGroupId: string;
+    let summaryDebtId: string;
+
+    beforeAll(async () => {
+      const gRes = await request(app)
+        .post('/api/groups')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ name: 'Summary Test Group', type: 'market', domain: 'gst' });
+      summaryGroupId = gRes.body.group._id;
+      const inv = gRes.body.group.inviteCode;
+
+      await request(app)
+        .post('/api/groups/join')
+        .set('Authorization', `Bearer ${memberToken}`)
+        .send({ inviteCode: inv });
+
+      // Create a GST debt
+      const dRes = await request(app)
+        .post('/api/debts')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Group-Id', summaryGroupId)
+        .send({
+          debtorId: memberId,
+          creditorId: ownerId,
+          baseAmount: 10000,
+          taxType: 'gst.intra',
+          taxInputs: { gstRate: 18 },
+        });
+      summaryDebtId = dRes.body.debt._id;
+    });
+
+    it('includes active/pending debts in summary totals', async () => {
+      const res = await request(app)
+        .get('/api/tax/summary')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Group-Id', summaryGroupId);
+
+      expect(res.status).toBe(200);
+      expect(res.body.domain).toBe('gst');
+      expect(res.body.totals.length).toBeGreaterThan(0);
+      expect(res.body.grandBase).toBe(10000);
+      expect(res.body.grandTax).toBe(1800);
+      expect(res.body.grandPayable).toBe(11800);
+    });
+
+    it('excludes settled debts from summary', async () => {
+      // Confirm and settle the debt
+      await request(app)
+        .post(`/api/debts/${summaryDebtId}/confirm`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .set('X-Group-Id', summaryGroupId);
+
+      await request(app)
+        .delete(`/api/debts/${summaryDebtId}`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Group-Id', summaryGroupId);
+
+      const res = await request(app)
+        .get('/api/tax/summary')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Group-Id', summaryGroupId);
+
+      expect(res.status).toBe(200);
+      // After settling, summary should be empty
+      expect(res.body.grandBase).toBe(0);
+      expect(res.body.grandTax).toBe(0);
+      expect(res.body.grandPayable).toBe(0);
+    });
+  });
+
+  describe('CSV Export — Tax Columns', () => {
+    it('exports CSV with baseAmount, taxType, taxAmount columns', async () => {
+      const res = await request(app)
+        .get('/api/debts/export.csv')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Group-Id', gstGroupId);
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toMatch(/text\/csv/);
+      const lines = res.text.split('\n');
+      const headers = lines[0].split(',');
+      expect(headers).toContain('baseAmount');
+      expect(headers).toContain('taxType');
+      expect(headers).toContain('taxAmount');
+    });
+  });
+
+  describe('CSV Import — Tax vs Non-tax Group Validation', () => {
+    it('requires taxType and baseAmount when importing into tax group', async () => {
+      // Attempt dryRun import with missing taxType and baseAmount
+      const csvContent = `debtor,creditor,amount
+${memberId},${ownerId},10000`;
+
+      const res = await request(app)
+        .post('/api/debts/import?dryRun=true')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Group-Id', gstGroupId)
+        .send({ csvText: csvContent });
+
+      expect(res.status).toBe(200);
+      expect(res.body.errorCount).toBeGreaterThan(0);
+      const rowErrors = res.body.errors[0].errors;
+      expect(rowErrors.some((e: string) => e.includes('taxType is required'))).toBe(true);
+      expect(rowErrors.some((e: string) => e.includes('baseAmount is required'))).toBe(true);
+    });
+
+    it('computes payable amount server-side for valid tax row in tax group', async () => {
+      const csvContent = `debtor,creditor,baseAmount,taxType
+${memberId},${ownerId},10000,gst.intra`;
+
+      const res = await request(app)
+        .post('/api/debts/import?dryRun=true')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Group-Id', gstGroupId)
+        .send({ csvText: csvContent });
+
+      expect(res.status).toBe(200);
+      expect(res.body.errorCount).toBe(0);
+      expect(res.body.validCount).toBe(1);
+      // GST intra 18%: payable = 11800
+      expect(res.body.preview[0].amount).toBe(11800);
+      expect(res.body.preview[0].baseAmount).toBe(10000);
+      expect(res.body.preview[0].taxAmount).toBe(1800);
+    });
+  });
+
+  describe('Settlement Cycle Tests — Tax Debts (No Engine Changes)', () => {
+    let cycleGroupId: string;
+    let cycleGroupInviteCode: string;
+
+    beforeAll(async () => {
+      // Create a GST group for cycle testing
+      const gRes = await request(app)
+        .post('/api/groups')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ name: 'Cycle Test Group', type: 'market', domain: 'gst' });
+      cycleGroupId = gRes.body.group._id;
+      cycleGroupInviteCode = gRes.body.group.inviteCode;
+
+      // Add admin
+      await request(app)
+        .post('/api/groups/join')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ inviteCode: cycleGroupInviteCode });
+      await request(app)
+        .patch(`/api/groups/${cycleGroupId}/members/${adminId}`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Group-Id', cycleGroupId)
+        .send({ role: 'admin' });
+
+      // Add member
+      await request(app)
+        .post('/api/groups/join')
+        .set('Authorization', `Bearer ${memberToken}`)
+        .send({ inviteCode: cycleGroupInviteCode });
+    });
+
+    it('GST cycled debts: payable amounts reach net balance of zero after settlement', async () => {
+      // Debt 1: owner owes member 10000 base => payable 11800 (18% GST intra)
+      const d1Res = await request(app)
+        .post('/api/debts')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Group-Id', cycleGroupId)
+        .send({
+          debtorId: ownerId,
+          creditorId: memberId,
+          baseAmount: 10000,
+          taxType: 'gst.intra',
+          taxInputs: { gstRate: 18 },
+        });
+      expect(d1Res.status).toBe(201);
+      expect(d1Res.body.debt.amount).toBe(11800);
+
+      // Confirm d1
+      await request(app)
+        .post(`/api/debts/${d1Res.body.debt._id}/confirm`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .set('X-Group-Id', cycleGroupId);
+
+      // Debt 2: member owes owner 8000 base => payable 9440 (18% GST intra)
+      const d2Res = await request(app)
+        .post('/api/debts')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Group-Id', cycleGroupId)
+        .send({
+          debtorId: memberId,
+          creditorId: ownerId,
+          baseAmount: 8000,
+          taxType: 'gst.intra',
+          taxInputs: { gstRate: 18 },
+        });
+      expect(d2Res.status).toBe(201);
+      expect(d2Res.body.debt.amount).toBe(9440);
+
+      // Confirm d2
+      await request(app)
+        .post(`/api/debts/${d2Res.body.debt._id}/confirm`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .set('X-Group-Id', cycleGroupId);
+
+      // Call settlement optimize — the engine uses PAYABLE amounts
+      mockedAxios.post.mockImplementationOnce((_url: any, data: any) => {
+        expect(data.debts).toEqual(
+          expect.arrayContaining([
+            { debtor: 'Owner Merchant', creditor: 'Member Merchant', amount: 11800 },
+            { debtor: 'Member Merchant', creditor: 'Owner Merchant', amount: 9440 },
+          ]),
+        );
+        return Promise.resolve({
+          data: {
+            net_balances: {
+              'Owner Merchant': -2360,
+              'Member Merchant': 2360,
+            },
+            transactions: [{ payer: 'Owner Merchant', payee: 'Member Merchant', amount: 2360 }],
+            transaction_count: 1,
+            total_amount_settled: 9440,
+            algorithm: 'Greedy Min-Transactions',
+          },
+        });
+      });
+
+      const settleRes = await request(app)
+        .post('/api/settlement/optimize')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Group-Id', cycleGroupId);
+
+      expect(settleRes.status).toBe(200);
+      expect(settleRes.body.success).toBe(true);
+
+      // Net: owner owes 11800 to member, member owes 9440 to owner
+      // Net balance: owner net = -11800 + 9440 = -2360 (owes 2360)
+      //              member net = +11800 - 9440 = +2360 (receives 2360)
+      // Sum of all net balances = 0
+      const balances = settleRes.body.net_balances;
+      const sum = Object.values(balances as Record<string, number>).reduce((a, b) => a + b, 0);
+      expect(sum).toBe(0);
+      expect(balances['Owner Merchant']).toBe(-2360);
+      expect(balances['Member Merchant']).toBe(2360);
+    });
+
+    it('TDS deduct debt in cycle: net balances sum to zero', async () => {
+      // Create a TDS income group for this test
+      const iRes = await request(app)
+        .post('/api/groups')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ name: 'TDS Cycle Group', type: 'market', domain: 'income' });
+      const tdsGroupId = iRes.body.group._id;
+      const tdsInv = iRes.body.group.inviteCode;
+
+      await request(app)
+        .post('/api/groups/join')
+        .set('Authorization', `Bearer ${memberToken}`)
+        .send({ inviteCode: tdsInv });
+
+      // Debt 1: owner owes member 100000 base, TDS professional 10%, payable 90000
+      const d1Res = await request(app)
+        .post('/api/debts')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Group-Id', tdsGroupId)
+        .send({
+          debtorId: ownerId,
+          creditorId: memberId,
+          baseAmount: 100000,
+          taxType: 'income.tds_professional',
+        });
+      expect(d1Res.body.debt.amount).toBe(90000);
+
+      // Confirm
+      await request(app)
+        .post(`/api/debts/${d1Res.body.debt._id}/confirm`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .set('X-Group-Id', tdsGroupId);
+
+      // Debt 2: member owes owner 50000 base, TDS contractor individual 1%, payable 49500
+      const d2Res = await request(app)
+        .post('/api/debts')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Group-Id', tdsGroupId)
+        .send({
+          debtorId: memberId,
+          creditorId: ownerId,
+          baseAmount: 50000,
+          taxType: 'income.tds_contractor_individual',
+        });
+      expect(d2Res.body.debt.amount).toBe(49500);
+
+      // Confirm
+      await request(app)
+        .post(`/api/debts/${d2Res.body.debt._id}/confirm`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .set('X-Group-Id', tdsGroupId);
+
+      // Call settlement optimize
+      mockedAxios.post.mockImplementationOnce((_url: any, data: any) => {
+        expect(data.debts).toEqual(
+          expect.arrayContaining([
+            { debtor: 'Owner Merchant', creditor: 'Member Merchant', amount: 90000 },
+            { debtor: 'Member Merchant', creditor: 'Owner Merchant', amount: 49500 },
+          ]),
+        );
+        return Promise.resolve({
+          data: {
+            net_balances: {
+              'Owner Merchant': -40500,
+              'Member Merchant': 40500,
+            },
+            transactions: [{ payer: 'Owner Merchant', payee: 'Member Merchant', amount: 40500 }],
+            transaction_count: 1,
+            total_amount_settled: 49500,
+            algorithm: 'Greedy Min-Transactions',
+          },
+        });
+      });
+
+      const settleRes = await request(app)
+        .post('/api/settlement/optimize')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Group-Id', tdsGroupId);
+
+      expect(settleRes.status).toBe(200);
+      const balances = settleRes.body.net_balances;
+      const sum = Object.values(balances as Record<string, number>).reduce((a, b) => a + b, 0);
+      expect(sum).toBe(0);
+
+      // Net: owner owes member 90000, member owes owner 49500
+      // Net for owner = -90000 + 49500 = -40500
+      // Net for member = +90000 - 49500 = +40500
+      expect(balances['Owner Merchant']).toBe(-40500);
+      expect(balances['Member Merchant']).toBe(40500);
+
+      // Verify debts use PAYABLE amounts (not base amounts)
+      expect(d1Res.body.debt.amount).toBe(90000);
+      expect(d2Res.body.debt.amount).toBe(49500);
     });
   });
 });

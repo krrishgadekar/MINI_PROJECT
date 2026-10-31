@@ -118,6 +118,8 @@ DebtSchema.index({ debtorId: 1, creditorId: 1 });
 DebtSchema.index({ status: 1 });
 // Compound index for group-scoped queries (IMPLEMENTATION_PLAN §2.3)
 DebtSchema.index({ groupId: 1, status: 1 });
+// Compound index for tax summary lookups (§2.2)
+DebtSchema.index({ groupId: 1, taxType: 1, status: 1 });
 // Index for due-date reminder job
 DebtSchema.index({ dueDate: 1, status: 1 });
 

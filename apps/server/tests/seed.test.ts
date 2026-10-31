@@ -152,5 +152,44 @@ describe('BE-37: Seed Database & Demo Integrity Tests', () => {
       expect(crawfordDebtIds.has(d._id.toString())).toBe(false);
       expect(d.groupId.toString()).toBe(supplierGroup!._id.toString());
     }
+
+    // 9. Day 3 Tax Integration Criteria
+    // Crawford Market (domain 'gst') has 3 taxed debts:
+    const crawfordTaxed = await Debt.find({
+      groupId: crawfordGroup!._id,
+      taxType: { $exists: true, $ne: null },
+    }).lean();
+    expect(crawfordTaxed).toHaveLength(3);
+
+    const gstIntra18 = crawfordTaxed.find((d) => d.taxType === 'gst.intra' && d.taxRate === 18);
+    const gstInter5 = crawfordTaxed.find((d) => d.taxType === 'gst.inter' && d.taxRate === 5);
+    const gstIntra0 = crawfordTaxed.find((d) => d.taxType === 'gst.intra' && d.taxRate === 0);
+
+    expect(gstIntra18).toBeDefined();
+    expect(gstIntra18!.baseAmount).toBe(10000);
+    expect(gstIntra18!.taxAmount).toBe(1800);
+    expect(gstIntra18!.amount).toBe(11800);
+
+    expect(gstInter5).toBeDefined();
+    expect(gstInter5!.baseAmount).toBe(20000);
+    expect(gstInter5!.taxAmount).toBe(1000);
+    expect(gstInter5!.amount).toBe(21000);
+
+    expect(gstIntra0).toBeDefined();
+    expect(gstIntra0!.baseAmount).toBe(15000);
+    expect(gstIntra0!.taxAmount).toBe(0);
+    expect(gstIntra0!.amount).toBe(15000);
+
+    // Supplier Circle (domain 'customs') has 1 customs.import debt:
+    const customsDebts = await Debt.find({
+      groupId: supplierGroup!._id,
+      taxType: 'customs.import',
+    }).lean();
+    expect(customsDebts).toHaveLength(1);
+    const customsDebt = customsDebts[0];
+    expect(customsDebt.baseAmount).toBe(500000);
+    expect(customsDebt.taxAmount).toBe(138675);
+    expect(customsDebt.amount).toBe(638675);
+    expect(customsDebt.taxBreakup).toHaveLength(3);
   });
 });

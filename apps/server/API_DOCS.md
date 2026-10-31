@@ -1054,3 +1054,67 @@ Aggregates tax totals grouped by taxType and grand totals across the tenancy.
   "grandPayable": 11800
 }
 ```
+
+
+---
+
+### 9.1 Supported Tax Domains & Statutory Rules Table (`FY2026-27`)
+
+| Domain | Tax Type Key | Effect | Inputs | Statutory Reference & Rates |
+|---|---|---|---|---|
+| `income` | `income.tds_contractor_individual` | `deduct` | None | Income-tax Act 2025, s.393 (194C) — 1% deduction on individual/HUF contractors. |
+| `income` | `income.tds_contractor_other` | `deduct` | None | Income-tax Act 2025, s.393 (194C) — 2% deduction on corporate/other contractors. |
+| `income` | `income.tds_professional` | `deduct` | None | Income-tax Act 2025, s.393 (194J) — 10% deduction on professional fees. |
+| `income` | `income.tds_commission` | `deduct` | None | Income-tax Act 2025, s.393 (194H) — 2% deduction on commission/brokerage. |
+| `gst` | `gst.intra` | `add` | `gstRate`: [0, 5, 18, 40] | CGST Act / SGST Act — split equally into CGST (rate/2) and SGST (rate/2). |
+| `gst` | `gst.inter` | `add` | `gstRate`: [0, 5, 18, 40] | IGST Act — 100% Integrated GST. |
+| `customs` | `customs.import` | `add` | `bcdRate`: [0, 5, 7.5, 10, 15, 20], `igstRate`: [0, 5, 18, 40] | Customs Tariff Act 1975 & Finance Act 2018: BCD + SWS (10% of BCD) + IGST on (base + BCD + SWS). |
+| `customs` | `customs.export` | `add` | `exportDutyRate`: [0, 5, 10, 15, 20] | Customs Tariff Act — export duty applied to base; export supplies are zero-rated for IGST (0%). |
+| `property` | `property.stamp_mumbai` | `add` | `womanBuyer`: boolean | Maharashtra Stamp Act (Mumbai City & Suburban) — 6% (5% duty + 1% metro cess); 5% if woman purchaser. |
+| `property` | `property.stamp_other_mh` | `add` | `womanBuyer`: boolean | Maharashtra Stamp Act (Rest of Maharashtra) — 7% (includes metro cess & LBT); 6% if woman purchaser. |
+| `property` | `property.registration` | `add` | None | Maharashtra Registration Rules — 1% of agreement value capped at ₹30,000 max. |
+| `vehicle` | `vehicle.petrol` | `add` | None | Maharashtra Motor Vehicles Tax Act 1958 — One-time tax: ≤10L: 11%, 10L-20L: 12%, >20L: 13%. |
+| `vehicle` | `vehicle.diesel` | `add` | None | Maharashtra Motor Vehicles Tax Act 1958 — One-time tax: ≤10L: 13%, 10L-20L: 14%, >20L: 15%. |
+| `vehicle` | `vehicle.cng` | `add` | None | Maharashtra Motor Vehicles Tax Act 1958 — One-time tax: ≤10L: 12%, 10L-20L: 13%, >20L: 14%. |
+| `vehicle` | `vehicle.ev` | `add` | None | Maharashtra EV Policy — 0% road tax (Exempt). |
+| `vehicle` | `vehicle.company_or_import` | `add` | None | Maharashtra Motor Vehicles Tax Act 1958 — Flat 20% on company-registered or imported vehicles. |
+
+---
+
+### 9.2 Simplification Note & Arithmetic Precision
+1. **Half-Up Rounding to Two Decimals**: Every tax component amount is rounded to two decimal places using standard half-up arithmetic (`round2 = Math.round((n + EPSILON) * 100) / 100`) before summation or deduction.
+2. **Statutory Calculation Formula**:
+   - For `taxEffect = 'add'`: amount = round2(baseAmount + taxAmount)
+   - For `taxEffect = 'deduct'`: amount = round2(baseAmount - taxAmount)
+3. **Payable Amount Invariant**: Existing graph traversal, Warshall transitive closure, cycle detection, cash settlement, and risk assessment engines continue to operate strictly on the payable `amount`. The tax module is purely additive and encapsulates tax metadata without altering clearing logic.
+
+---
+
+### 9.3 How to Add a New Tax Type (Developer Guide)
+To introduce a new statutory tax type:
+1. **Define Schema & Rule in `apps/server/src/tax/rules.ts`**:
+   Add an entry into `TAX_RULES` with:
+   - `domain`: One of `'income' | 'gst' | 'customs' | 'property' | 'vehicle'`.
+   - `key`: Namespaced identifier (e.g. `gst.composition`).
+   - `effect`: `'add'` or `'deduct'`.
+   - `inputs`: Array of input definitions (`select`, `number`, or `boolean`).
+   - `compute`: Pure computation function returning `{ taxAmount, taxRate, breakup }`.
+2. **Sync Frontend Definitions in `client/src/tax/rules.ts`**:
+   Mirror the rule definition in the client package for optimistic client-side calculations and previews.
+3. **Write Hand-Computed Test Vectors**:
+   Add test vectors to `apps/server/tests/tax.test.ts` and `client/src/tax/__tests__/taxRules.test.ts` asserting exact penny precision.
+
+---
+
+### 9.4 Academic Course Concepts Mapping
+
+- **DBMS (Database Management Systems)**:
+  - **Schema Evolution & Normalization**: Additive migration adding `baseAmount`, `taxType`, `taxAmount`, `taxEffect`, `taxRate`, `taxBreakup`, and `taxRuleVersion` to debts without breaking existing rows.
+  - **Performance Indexing**: Compound index `DebtSchema.index({ groupId: 1, taxType: 1, status: 1 })` optimizes tenant-isolated statutory aggregations and excludes settled/cancelled records.
+  - **Optimistic Concurrency Control (OCC)**: `casUpdate` enforces CAS version increments on debt mutations and prevents concurrent partial payment conflicts or double edits.
+- **DAA (Design & Analysis of Algorithms)**:
+  - **O(1) Pure Tax Calculation**: Tax calculations run in constant time O(1) per debt transaction.
+  - **Invariant Graph Algorithms**: Graph cycles, Warshall reachability matrix, and greedy bipartite debt minimization algorithms operate directly on payable balances (net sum = 0), maintaining theoretical complexity guarantees.
+- **SE (Software Engineering)**:
+  - **Additive Interface Contracts**: Legacy groups (`domain: 'none'`) operate identically without breaking backward compatibility.
+  - **Strict Multi-Tenant Isolation**: Circle-scoped domain locking (`409 DOMAIN_LOCKED`) prevents cross-domain contamination and ensures statutory compliance.

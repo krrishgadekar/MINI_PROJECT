@@ -1029,6 +1029,7 @@ export const updateDebt = async (
 
     await casUpdate(Debt, debt._id, expectedVersion, {
       amount: parsed.data.amount,
+      baseAmount: parsed.data.amount,
     });
 
     const populated = await Debt.findById(debt._id).populate([
@@ -1039,6 +1040,7 @@ export const updateDebt = async (
     await audit(req, 'DEBT_UPDATED', 'Debt', debt._id, {
       previousAmount: debt.amount,
       amount: parsed.data.amount,
+      baseAmount: parsed.data.amount,
     });
 
     const groupId = req.groupId;

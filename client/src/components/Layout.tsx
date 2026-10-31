@@ -6,11 +6,13 @@ import { useUiStore } from '../store/useUiStore';
 import { useNotifications } from '../hooks/useNotifications';
 import { useSocket } from '../hooks/useSocket';
 import { useAuth } from '../state/AuthProvider';
+import Logo from './Logo';
+import Footer from './Footer';
 
 import DemoPresentationBar from './DemoPresentationBar';
 
 /**
- * Layout — App shell with responsive sidebar + topbar + content area + command palette.
+ * Layout — App shell with responsive sidebar + topbar + content area.
  */
 export default function Layout() {
   const { toggleSidebar } = useUiStore();
@@ -49,24 +51,8 @@ export default function Layout() {
           onClick={() => navigate('/')}
           style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
         >
-          <div
-            style={{
-              width: 24,
-              height: 24,
-              border: '1.5px solid #0d2247',
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              padding: 2,
-              gap: 2,
-              background: '#ffffff',
-            }}
-          >
-            <div style={{ background: '#0d2247' }} />
-            <div style={{ background: '#c8502a' }} />
-            <div style={{ background: '#1e6b4b' }} />
-            <div style={{ border: '1px solid #0d2247' }} />
-          </div>
-          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--font-size-md)', color: '#0d2247' }}>
+          <Logo size={26} />
+          <span style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)' }}>
             CreditFlow
           </span>
         </div>
@@ -97,7 +83,7 @@ export default function Layout() {
                   width: 8,
                   height: 8,
                   borderRadius: '50%',
-                  background: 'var(--risk-critical)',
+                  background: 'var(--color-danger)',
                 }}
               />
             )}
@@ -110,9 +96,9 @@ export default function Layout() {
               navigate('/login');
             }}
             style={{
-              background: 'rgba(239, 68, 68, 0.12)',
-              border: '1px solid rgba(239, 68, 68, 0.28)',
-              color: '#f87171',
+              background: 'var(--color-danger-bg)',
+              border: '1px solid rgba(200, 80, 42, 0.2)',
+              color: 'var(--color-danger)',
               cursor: 'pointer',
               padding: '6px 8px',
               borderRadius: 6,
@@ -135,6 +121,7 @@ export default function Layout() {
         <div style={{ flex: 1 }}>
           <Outlet />
         </div>
+        <Footer />
       </main>
     </div>
   );

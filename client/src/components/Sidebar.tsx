@@ -19,17 +19,18 @@ import { useNotifications } from '../hooks/useNotifications';
 import { useAuth } from '../state/AuthProvider';
 import { useGroup } from '../state/GroupProvider';
 import { TaxBadge } from './tax/TaxBadge';
+import Logo from './Logo';
 
 export const navItems = [
-  { to: '/', code: '01', icon: LayoutDashboard, label: 'Overview' },
-  { to: '/network', code: '02', icon: Share2, label: 'Network' },
-  { to: '/ledger', code: '03', icon: Receipt, label: 'Ledger' },
-  { to: '/settle', code: '04', icon: GitCommit, label: 'Settle' },
-  { to: '/risk', code: '05', icon: ShieldAlert, label: 'Risk' },
-  { to: '/groups', code: '06', icon: Users, label: 'Groups' },
-  { to: '/inbox', code: '07', icon: Bell, label: 'Inbox', hasBadge: true },
-  { to: '/activity', code: '08', icon: Activity, label: 'Activity' },
-  { to: '/settings', code: '09', icon: Settings, label: 'Settings' },
+  { to: '/', icon: LayoutDashboard, label: 'Overview' },
+  { to: '/network', icon: Share2, label: 'Network' },
+  { to: '/ledger', icon: Receipt, label: 'Ledger' },
+  { to: '/settle', icon: GitCommit, label: 'Settle' },
+  { to: '/risk', icon: ShieldAlert, label: 'Risk' },
+  { to: '/groups', icon: Users, label: 'Groups' },
+  { to: '/inbox', icon: Bell, label: 'Inbox', hasBadge: true },
+  { to: '/activity', icon: Activity, label: 'Activity' },
+  { to: '/settings', icon: Settings, label: 'Settings' },
 ];
 
 export default function Sidebar() {
@@ -50,7 +51,7 @@ export default function Sidebar() {
     .toUpperCase();
   const userRole = activeGroup
     ? `${activeGroup.name} · ${activeGroup.role}`
-    : (merchant?.email || 'Circle Owner · CreditFlow');
+    : (merchant?.email || 'Member');
 
   const handleLogout = () => {
     logout();
@@ -67,7 +68,7 @@ export default function Sidebar() {
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(13, 24, 41, 0.4)',
+            background: 'rgba(0, 0, 0, 0.4)',
             backdropFilter: 'blur(4px)',
             zIndex: 998,
           }}
@@ -76,32 +77,13 @@ export default function Sidebar() {
       )}
 
       <nav className={`sidebar ${sidebarOpen ? 'open' : ''}`} style={{ zIndex: 999 }}>
-        {/* Brand — Illoca Architectural Studio Header */}
+        {/* Brand Header */}
         <div className="sidebar-brand" style={{ justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {/* Illoca Geometric Mark */}
-            <div
-              style={{
-                width: 30,
-                height: 30,
-                border: '1.5px solid #0d2247',
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                padding: 2,
-                gap: 2,
-                background: '#ffffff',
-                flexShrink: 0,
-              }}
-            >
-              <div style={{ background: '#0d2247' }} />
-              <div style={{ background: '#c8502a' }} />
-              <div style={{ background: '#1e6b4b' }} />
-              <div style={{ border: '1px solid #0d2247' }} />
-            </div>
-
+            <Logo size={32} />
             <div className="sidebar-brand-text">
               <h1>CreditFlow</h1>
-              <p>DEBT OS // SPEC 2.4</p>
+              <p>Debt Settlement Platform</p>
             </div>
           </div>
 
@@ -123,28 +105,24 @@ export default function Sidebar() {
           </button>
         </div>
 
-        {/* Group Switcher Dropdown (Architectural Specification Field) */}
+        {/* Group Switcher */}
         <div
           style={{
-            padding: '10px 14px',
-            borderBottom: '1px solid #e8e2d8',
-            background: '#faf7f2',
+            padding: '12px 14px',
+            borderBottom: '1px solid var(--border-primary)',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Layers size={12} style={{ color: '#0d2247' }} />
+              <Layers size={13} style={{ color: 'var(--text-muted)' }} />
               <span
                 style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '0.65rem',
-                  fontWeight: 700,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.08em',
+                  fontSize: '0.72rem',
+                  fontWeight: 600,
                   color: 'var(--text-muted)',
                 }}
               >
-                MARKET CIRCLE
+                Your Group
               </span>
             </div>
             {activeGroup && (
@@ -156,13 +134,12 @@ export default function Sidebar() {
             onChange={(e) => setActiveGroup(e.target.value)}
             style={{
               width: '100%',
-              padding: '5px 8px',
-              borderRadius: 2,
-              background: '#ffffff',
-              color: '#0d1829',
-              border: '1px solid #dcd5cb',
-              fontFamily: 'var(--font-mono)',
-              fontSize: '0.75rem',
+              padding: '7px 10px',
+              borderRadius: 6,
+              background: 'var(--bg-secondary)',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--border-primary)',
+              fontSize: '0.82rem',
               fontWeight: 600,
               cursor: 'pointer',
               outline: 'none',
@@ -173,15 +150,15 @@ export default function Sidebar() {
             ) : (
               groups.map((g) => (
                 <option key={g._id} value={g._id}>
-                  {g.name} [{g.role.toUpperCase()}]
+                  {g.name} [{g.role}]
                 </option>
               ))
             )}
           </select>
         </div>
 
-        {/* Quick Search Button (triggers Ctrl+K) */}
-        <div style={{ padding: '8px 14px', borderBottom: '1px solid #f0ebe2' }}>
+        {/* Quick Search Button */}
+        <div style={{ padding: '8px 14px', borderBottom: '1px solid var(--border-primary)' }}>
           <button
             type="button"
             onClick={() => {
@@ -192,38 +169,36 @@ export default function Sidebar() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              padding: '6px 10px',
-              borderRadius: 2,
-              background: '#ffffff',
-              border: '1px solid #dcd5cb',
+              padding: '8px 12px',
+              borderRadius: 6,
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--border-primary)',
               color: 'var(--text-muted)',
-              fontFamily: 'var(--font-mono)',
-              fontSize: '0.72rem',
+              fontSize: '0.82rem',
               cursor: 'pointer',
               transition: 'all 0.15s ease',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Search size={12} color="#0d2247" />
-              <span>SEARCH...</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Search size={14} color="var(--text-muted)" />
+              <span>Search...</span>
             </div>
             <kbd
               style={{
-                fontSize: 9,
-                padding: '2px 4px',
-                borderRadius: 2,
-                background: '#f4f0eb',
-                border: '1px solid #dcd5cb',
-                color: '#0d2247',
-                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                padding: '2px 6px',
+                borderRadius: 4,
+                background: '#ffffff',
+                border: '1px solid var(--border-primary)',
+                color: 'var(--text-muted)',
               }}
             >
-              ^K
+              ⌘K
             </kbd>
           </button>
         </div>
 
-        {/* Navigation Links with Monospace Sequence Indicators */}
+        {/* Navigation Links */}
         <div className="sidebar-nav">
           {navItems.map((item) => (
             <NavLink
@@ -234,32 +209,19 @@ export default function Sidebar() {
               className={({ isActive }) =>
                 `sidebar-link${isActive ? ' active' : ''}`
               }
-              style={{ position: 'relative' }}
             >
-              <span
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '0.65rem',
-                  color: 'var(--text-muted)',
-                  width: 18,
-                  fontWeight: 600,
-                }}
-              >
-                {item.code}
-              </span>
-              <item.icon className="sidebar-icon" size={16} />
-              <span style={{ flex: 1, letterSpacing: '-0.01em' }}>{item.label}</span>
+              <item.icon className="sidebar-icon" size={18} />
+              <span style={{ flex: 1 }}>{item.label}</span>
               {item.hasBadge && unreadCount > 0 && (
                 <span
                   style={{
-                    background: '#c8502a',
+                    background: 'var(--brand-terracotta)',
                     color: '#ffffff',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '0.62rem',
+                    fontSize: '0.68rem',
                     fontWeight: 700,
-                    padding: '2px 5px',
-                    borderRadius: 2,
-                    lineHeight: 1,
+                    padding: '2px 7px',
+                    borderRadius: 10,
+                    lineHeight: 1.2,
                   }}
                 >
                   {unreadCount}
@@ -274,9 +236,9 @@ export default function Sidebar() {
             className="sidebar-link"
             onClick={handleLogout}
             style={{
-              border: '1px solid #e8e2d8',
-              background: '#faf8f4',
-              color: '#c8502a',
+              border: '1px solid var(--border-primary)',
+              background: 'var(--bg-secondary)',
+              color: 'var(--color-danger)',
               width: '100%',
               textAlign: 'left',
               cursor: 'pointer',
@@ -284,17 +246,16 @@ export default function Sidebar() {
               display: 'flex',
               alignItems: 'center',
               gap: 8,
-              borderRadius: 2,
             }}
           >
-            <LogOut className="sidebar-icon" size={15} style={{ color: '#c8502a' }} />
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', fontWeight: 600 }}>
-              DISCONNECT
+            <LogOut className="sidebar-icon" size={16} style={{ color: 'var(--color-danger)' }} />
+            <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>
+              Log Out
             </span>
           </button>
         </div>
 
-        {/* User Profile Footer — Architectural Sign-off Stamp */}
+        {/* User Profile Footer */}
         <div className="sidebar-footer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
           <div
             className="sidebar-user sidebar-user-link"

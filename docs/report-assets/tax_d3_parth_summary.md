@@ -123,3 +123,4 @@
 ## 4. Contract Deviations
 
 None. All contract endpoints, interfaces, data formats, and behavioral rules strictly follow the specification. Existing netting and settlement graph algorithms, legacy groups (`domain: 'none'`), and risk engines remain completely intact.
+

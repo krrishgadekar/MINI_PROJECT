@@ -1,0 +1,38 @@
+services:
+  # 1. Python Algorithmic Engine (FastAPI)
+  - type: web
+    name: creditflow-engine
+    env: docker
+    dockerfilePath: ./creditflow/Dockerfile
+    dockerContext: .
+    plan: free
+    region: singapore
+    envVars:
+      - key: PORT
+        value: 8000
+
+  # 2. Node.js Express Main Backend
+  - type: web
+    name: creditflow-server
+    env: docker
+    dockerfilePath: ./apps/server/Dockerfile
+    dockerContext: .
+    plan: free
+    region: singapore
+    envVars:
+      - key: PORT
+        value: 4000
+      - key: NODE_ENV
+        value: production
+      - key: AUTO_SEED
+        value: "true"
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: MONGO_URI
+        sync: false
+      - key: PYTHON_ENGINE_URL
+        sync: false
+      - key: CLIENT_ORIGINS
+        value: "*"

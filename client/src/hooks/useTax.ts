@@ -6,13 +6,14 @@
  *   - useTaxRules(domain): fetch rule definitions & inputs for active domain
  *   - useTaxPreview(typeKey, base, inputs): 300ms debounced preview query
  *   - useSetGroupDomain(): admin mutation to lock in group tax domain
+ *   - useTaxSummary(): aggregated tax totals & breakdown by type
  */
 
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../api';
 import { queryKeys } from '../api/keys';
-import type { TaxDomain } from '../types';
+import type { TaxDomain, TaxSummary } from '../types';
 
 export function useTaxDomains() {
   return useQuery({
@@ -89,3 +90,19 @@ export function useSetGroupDomain() {
   });
 }
 
+export function useTaxSummary() {
+  return useQuery<TaxSummary>({
+    queryKey: queryKeys.tax.summary(),
+    queryFn: () =>
+      api.tax.summary
+        ? api.tax.summary()
+        : Promise.resolve({
+            domain: 'none' as TaxDomain,
+            totals: [],
+            grandBase: 0,
+            grandTax: 0,
+            grandPayable: 0,
+          }),
+    staleTime: 30 * 1000,
+  });
+}

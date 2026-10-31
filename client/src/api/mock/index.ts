@@ -22,6 +22,7 @@ export { riskMock } from './risk.mock';
 export { notificationsMock } from './notifications.mock';
 export { auditMock } from './audit.mock';
 export { taxMock } from './tax.mock';
+export { getTaxSummaryMock } from './taxSummary.mock';
 
 const mockAuth = {
   login: async (data: LoginRequest): Promise<AuthResponse> => ({

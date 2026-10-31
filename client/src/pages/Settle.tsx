@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react';
 import { ArrowRight, CheckCircle2 } from 'lucide-react';
 import TransactionList from '../components/TransactionList';
+import { useGroup } from '../state/GroupProvider';
+import { useTaxSummary } from '../hooks/useTax';
 import {
   seedData,
   computeMockSettlement,
@@ -19,6 +21,10 @@ import {
 } from 'recharts';
 
 export default function Settle() {
+  const { activeGroup } = useGroup();
+  const isTaxGroup = Boolean(activeGroup?.domain && activeGroup.domain !== 'none');
+  const { data: taxSummary } = useTaxSummary();
+
   const [settlement, setSettlement] = useState<SettlementResponse | null>(() => computeMockSettlement());
   const [loading, setLoading] = useState(false);
   const [computed, setComputed] = useState(true);
@@ -265,7 +271,42 @@ export default function Settle() {
               <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.05rem', fontWeight: 700, color: '#0d2247', marginBottom: 12 }}>
                 Net Settlement Wire Transfers
               </h3>
-              <TransactionList transactions={settlement.transactions} />
+
+              {/* Tax Note and Grand Totals (§2.2 D3-P) */}
+              {isTaxGroup && (
+                <div
+                  data-testid="settle-tax-note"
+                  style={{
+                    fontSize: '0.75rem',
+                    fontFamily: 'var(--font-mono)',
+                    color: '#0d2247',
+                    background: '#faf8f4',
+                    border: '1px solid #dcd5cb',
+                    borderRadius: 2,
+                    padding: '8px 12px',
+                    marginBottom: 14,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 4,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontWeight: 700 }}>
+                    <span>Amounts are payable including tax</span>
+                    <span style={{ color: '#c8502a', fontSize: '0.68rem', textTransform: 'uppercase' }}>
+                      {activeGroup?.domain} DOMAIN
+                    </span>
+                  </div>
+                  {taxSummary && (
+                    <div style={{ display: 'flex', gap: 14, color: 'var(--text-muted)', fontSize: '0.7rem', marginTop: 2, flexWrap: 'wrap' }}>
+                      <span>Grand Base: <strong style={{ color: '#0d2247' }}>₹{taxSummary.grandBase.toLocaleString('en-IN')}</strong></span>
+                      <span>Grand Tax: <strong style={{ color: '#c8502a' }}>₹{taxSummary.grandTax.toLocaleString('en-IN')}</strong></span>
+                      <span>Grand Payable: <strong style={{ color: '#1e6b4b' }}>₹{taxSummary.grandPayable.toLocaleString('en-IN')}</strong></span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <TransactionList transactions={settlement.transactions} isTaxGroup={isTaxGroup} />
             </div>
 
             {/* Net Balances Chart */}

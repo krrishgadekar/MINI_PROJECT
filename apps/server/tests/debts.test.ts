@@ -169,11 +169,17 @@ describe('Debts CSV Export & Import (BE-31)', () => {
         password: 'password123',
       });
       memberAccessToken = reg.body.accessToken;
-      await Membership.create({
+      const existingMem = await Membership.findOne({
         groupId: new mongoose.Types.ObjectId(groupId),
         merchantId: new mongoose.Types.ObjectId(reg.body.merchant.id),
-        role: 'member',
       });
+      if (!existingMem) {
+        await Membership.create({
+          groupId: new mongoose.Types.ObjectId(groupId),
+          merchantId: new mongoose.Types.ObjectId(reg.body.merchant.id),
+          role: 'member',
+        });
+      }
     }
 
     // Create a second group for cross-tenant isolation testing

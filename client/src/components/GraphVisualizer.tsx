@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import ForceGraph2D from "react-force-graph-2d";
 import { bfs, buildAdjacencyList } from "../graph/traversal";
 import type { DebtEdge, RiskScoreResponse, GraphNode, GraphLink } from "../types";
@@ -11,6 +12,7 @@ interface GraphVisualizerProps {
   height?: number;
   contagionSource?: string;
   contagionLossMap?: Record<string, number>;
+  isTaxGroup?: boolean;
 }
 
 const RISK_COLORS: Record<string, string> = {
@@ -49,13 +51,19 @@ export default function GraphVisualizer({
   height = 520,
   contagionSource,
   contagionLossMap = {},
+  isTaxGroup = false,
 }: GraphVisualizerProps) {
+  const navigate = useNavigate();
   const fgRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [highlightedNodes, setHighlightedNodes] = useState<Set<string>>(new Set());
   const [highlightedEdges, setHighlightedEdges] = useState<Set<string>>(new Set());
+
+  // Tax toolbar toggle: 'payable' | 'base' | 'tax'
+  const [showMode, setShowMode] = useState<'payable' | 'base' | 'tax'>('payable');
+  const [hoveredLink, setHoveredLink] = useState<any | null>(null);
 
   const riskMap = useMemo(() => {
     const map: Record<string, RiskScoreResponse> = {};
@@ -90,6 +98,13 @@ export default function GraphVisualizer({
       source: d.debtor,
       target: d.creditor,
       amount: d.amount,
+      debtId: d.debtId,
+      baseAmount: d.baseAmount,
+      taxType: d.taxType,
+      taxEffect: d.taxEffect,
+      taxAmount: d.taxAmount,
+      taxRate: d.taxRate,
+      taxBreakup: d.taxBreakup,
     }));
     return { nodes, links };
   }, [merchants, debts, riskMap, exposureMap, maxExposure]);
@@ -314,11 +329,25 @@ export default function GraphVisualizer({
           ? HIGHLIGHT_EDGE
           : "rgba(15,43,91,0.25)";
 
+      // Amount to display & width source based on showMode
+      const displayAmt = isTaxGroup
+        ? showMode === 'base'
+          ? (link.baseAmount ?? link.amount)
+          : showMode === 'tax'
+            ? (link.taxAmount ?? 0)
+            : link.amount
+        : link.amount;
+
+      // Edge width scaled according to selected amount
+      const baseWidth = (isHL && highlightedEdges.size > 0 ? 2 : 0.8);
+      const widthFactor = isTaxGroup ? Math.min(2.5, 0.8 + (displayAmt / 30000)) : 1;
+      const finalWidth = (baseWidth * widthFactor) / globalScale;
+
       ctx.beginPath();
       ctx.moveTo(source.x, source.y);
       ctx.quadraticCurveTo(cpx, cpy, target.x, target.y);
       ctx.strokeStyle = edgeCol;
-      ctx.lineWidth = (isHL && highlightedEdges.size > 0 ? 2 : 0.8) / globalScale;
+      ctx.lineWidth = Math.max(0.6 / globalScale, finalWidth);
       ctx.stroke();
 
       // Arrow
@@ -338,25 +367,63 @@ export default function GraphVisualizer({
       ctx.fillStyle = edgeCol;
       ctx.fill();
 
-      // Amount label
-      if (isHL && highlightedEdges.size > 0) {
+      // Amount label & tax chip
+      const shouldDrawLabel = isHL && (highlightedEdges.size > 0 || isTaxGroup || hoveredLink === link);
+      if (shouldDrawLabel) {
         const sfs = Math.max(9 / globalScale, 2.5);
-        const amtTxt = `\u20B9${(link.amount / 1000).toFixed(0)}k`;
+        const amtTxt = `\u20B9${displayAmt >= 1000 ? (displayAmt / 1000).toFixed(0) + 'k' : displayAmt.toFixed(0)}`;
         ctx.font = `700 ${sfs}px 'JetBrains Mono', monospace`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        const tw = ctx.measureText(amtTxt).width;
-        ctx.fillStyle = "rgba(255,253,249,0.9)";
+
+        const amtWidth = ctx.measureText(amtTxt).width;
+        const hasTaxChip = isTaxGroup && link.taxType;
+        const chipText = hasTaxChip ? String(link.taxType).toUpperCase() : "";
+        const chipFont = `700 ${Math.max(7 / globalScale, 2)}px 'JetBrains Mono', monospace`;
+
+        let chipWidth = 0;
+        if (hasTaxChip) {
+          ctx.font = chipFont;
+          chipWidth = ctx.measureText(chipText).width + (6 / globalScale);
+        }
+
+        const totalInnerW = amtWidth + (hasTaxChip ? chipWidth + (4 / globalScale) : 0);
+        const padX = 4 / globalScale;
+        const padY = 2 / globalScale;
+        const badgeH = sfs + padY * 2;
+        const startX = cpx - totalInnerW / 2 - padX;
+
+        // Container background pill
+        ctx.fillStyle = "rgba(255,253,249,0.92)";
         ctx.beginPath();
-        ctx.roundRect(cpx - tw / 2 - 3, cpy - sfs / 2 - 2, tw + 6, sfs + 4, 2);
+        ctx.roundRect(startX, cpy - badgeH / 2, totalInnerW + padX * 2, badgeH, 3 / globalScale);
         ctx.fill();
+        ctx.strokeStyle = edgeCol;
+        ctx.lineWidth = 0.5 / globalScale;
+        ctx.stroke();
+
+        let curX = startX + padX;
+        if (hasTaxChip) {
+          const chipBg = link.taxEffect === "deduct" ? "#16a34a" : "#c8502a";
+          ctx.fillStyle = chipBg;
+          ctx.beginPath();
+          ctx.roundRect(curX, cpy - (sfs * 0.85) / 2, chipWidth, sfs * 0.85, 2 / globalScale);
+          ctx.fill();
+
+          ctx.font = chipFont;
+          ctx.fillStyle = "#ffffff";
+          ctx.fillText(chipText, curX + chipWidth / 2, cpy);
+          curX += chipWidth + (4 / globalScale);
+        }
+
+        ctx.font = `700 ${sfs}px 'JetBrains Mono', monospace`;
         ctx.fillStyle = edgeCol;
-        ctx.fillText(amtTxt, cpx, cpy);
+        ctx.fillText(amtTxt, curX + amtWidth / 2, cpy);
       }
 
       ctx.globalAlpha = 1;
     },
-    [highlightedEdges, contagionSource]
+    [highlightedEdges, contagionSource, isTaxGroup, showMode, hoveredLink]
   );
 
   return (
@@ -366,10 +433,61 @@ export default function GraphVisualizer({
       style={{ height, position: "relative", background: "linear-gradient(135deg, #fdfbf7 0%, #f5f0ea 100%)" }}
     >
       {/* Toolbar */}
-      <div className="graph-controls" style={{ display: "flex", gap: 6 }}>
+      <div className="graph-controls" style={{ display: "flex", gap: 6, alignItems: "center" }}>
         <button className="btn btn-secondary btn-sm" onClick={handleReset} style={{ borderRadius: 6 }}>
           <RotateCcw size={14} style={{ marginRight: 4 }} /> Reset
         </button>
+
+        {/* Tax amount view toggle (§2.2 D3-P) */}
+        {isTaxGroup && (
+          <div
+            data-testid="tax-graph-toggle"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              background: "rgba(255,253,249,0.95)",
+              border: "1px solid #dcd5cb",
+              borderRadius: 6,
+              padding: "2px 4px",
+              gap: 2,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "0.68rem",
+                fontWeight: 700,
+                color: "var(--text-secondary)",
+                padding: "2px 6px",
+              }}
+            >
+              Show:
+            </span>
+            {(["payable", "base", "tax"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                data-testid={`toggle-${mode}`}
+                onClick={() => setShowMode(mode)}
+                style={{
+                  background: showMode === mode ? "#0d2247" : "transparent",
+                  color: showMode === mode ? "#ffffff" : "var(--text-secondary)",
+                  border: "none",
+                  borderRadius: 4,
+                  padding: "3px 8px",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "0.7rem",
+                  fontWeight: showMode === mode ? 700 : 500,
+                  cursor: "pointer",
+                  textTransform: "capitalize",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                {mode === "payable" ? "Payable" : mode === "base" ? "Base" : "Tax"}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Hint */}
@@ -384,7 +502,92 @@ export default function GraphVisualizer({
           }}
         >
           <MousePointer2 size={13} />
-          Click a node to explore &middot; Scroll to zoom &middot; Drag to pan
+          Click a node or edge to explore &middot; Scroll to zoom &middot; Drag to pan
+        </div>
+      )}
+
+      {/* Tax Edge Hover Tooltip (§2.2 D3-P) */}
+      {hoveredLink && isTaxGroup && (
+        <div
+          data-testid="tax-edge-tooltip"
+          className="animate-fade-in"
+          style={{
+            position: "absolute",
+            top: 14,
+            right: 14,
+            zIndex: 25,
+            background: "rgba(255,253,249,0.96)",
+            backdropFilter: "blur(10px)",
+            border: "1px solid #dcd5cb",
+            borderRadius: 8,
+            padding: "12px 16px",
+            minWidth: 220,
+            boxShadow: "0 4px 16px rgba(13,24,41,0.12)",
+            pointerEvents: "none",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "0.7rem",
+                fontWeight: 700,
+                padding: "2px 6px",
+                borderRadius: 3,
+                color: "#ffffff",
+                background: hoveredLink.taxEffect === "deduct" ? "#16a34a" : "#c8502a",
+                textTransform: "uppercase",
+              }}
+            >
+              {hoveredLink.taxType || "Tax"}
+            </span>
+            <span style={{ fontSize: "0.68rem", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
+              {typeof hoveredLink.source === "object" ? hoveredLink.source.id : hoveredLink.source} →{" "}
+              {typeof hoveredLink.target === "object" ? hoveredLink.target.id : hoveredLink.target}
+            </span>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "0.76rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", color: "var(--text-secondary)" }}>
+              <span>Base:</span>
+              <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>
+                ₹{(hoveredLink.baseAmount ?? hoveredLink.amount).toLocaleString("en-IN")}
+              </span>
+            </div>
+
+            {hoveredLink.taxBreakup && hoveredLink.taxBreakup.length > 0 && (
+              <div style={{ borderTop: "1px dashed #dcd5cb", borderBottom: "1px dashed #dcd5cb", padding: "4px 0", margin: "2px 0" }}>
+                {hoveredLink.taxBreakup.map((b: any, idx: number) => (
+                  <div key={idx} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", color: "var(--text-muted)" }}>
+                    <span>{b.label} {b.rate != null ? `(${b.rate}%)` : ""}:</span>
+                    <span style={{ fontFamily: "var(--font-mono)" }}>
+                      {hoveredLink.taxEffect === "deduct" ? "-" : "+"}₹{Number(b.amount).toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {hoveredLink.taxAmount != null && (
+              <div style={{ display: "flex", justifyContent: "space-between", color: hoveredLink.taxEffect === "deduct" ? "#16a34a" : "#c8502a", fontWeight: 600 }}>
+                <span>Tax ({hoveredLink.taxEffect === "deduct" ? "deducted" : "added"}):</span>
+                <span style={{ fontFamily: "var(--font-mono)" }}>
+                  ₹{Number(hoveredLink.taxAmount).toLocaleString("en-IN")}
+                </span>
+              </div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "space-between", color: "#0d2247", fontWeight: 700, paddingTop: 4, borderTop: "1px solid #dcd5cb" }}>
+              <span>Payable:</span>
+              <span style={{ fontFamily: "var(--font-mono)" }}>
+                ₹{Number(hoveredLink.amount).toLocaleString("en-IN")}
+              </span>
+            </div>
+
+            <div style={{ fontSize: "0.66rem", color: "#888", marginTop: 4, fontStyle: "italic" }}>
+              Click edge to open transaction detail
+            </div>
+          </div>
         </div>
       )}
 
@@ -443,6 +646,15 @@ export default function GraphVisualizer({
         linkCanvasObject={linkCanvasObject}
         onNodeClick={handleNodeClick}
         onNodeHover={handleNodeHover}
+        onLinkClick={(link: any) => {
+          if (link?.debtId) {
+            navigate(`/ledger/${link.debtId}`);
+          }
+        }}
+        onLinkHover={(link: any) => {
+          setHoveredLink(link || null);
+        }}
+        linkHoverPrecision={6}
         nodeRelSize={6}
         linkDirectionalArrowLength={0}
         backgroundColor="transparent"

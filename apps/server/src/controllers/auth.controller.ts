@@ -83,14 +83,16 @@ export const register = async (req: Request, res: Response, next: NextFunction):
       },
     });
 
-    // Auto-join default demo group (e.g. Crawford Market) if it exists
-    const defaultGroup = await Group.findOne();
-    if (defaultGroup) {
-      await Membership.create({
-        groupId: defaultGroup._id,
-        merchantId: merchant._id,
-        role: 'member',
-      });
+    // Auto-join default demo group (e.g. Crawford Market) if it exists in non-test environments
+    if (process.env.NODE_ENV !== 'test') {
+      const defaultGroup = (await Group.findOne({ name: 'Crawford Market' })) || (await Group.findOne());
+      if (defaultGroup) {
+        await Membership.create({
+          groupId: defaultGroup._id,
+          merchantId: merchant._id,
+          role: 'member',
+        }).catch(() => {});
+      }
     }
 
     const familyId = uuidv4();

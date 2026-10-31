@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useDebts } from '../hooks/useDebts';
 import { useGroupRisk } from '../hooks/useRisk';
 import { useNotifications } from '../hooks/useNotifications';
+import { useGroup } from '../state/GroupProvider';
+import { useTaxSummary } from '../hooks/useTax';
 
 import {
   CreditCard,
@@ -20,6 +22,10 @@ import {
   ResponsiveContainer,
   PieChart,
   Pie,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
   Cell,
   Tooltip as RechartsTooltip,
 } from 'recharts';
@@ -68,6 +74,9 @@ function DragHandle() {
 
 export default function Overview() {
   const navigate = useNavigate();
+  const { activeGroup } = useGroup();
+  const isTaxGroup = Boolean(activeGroup?.domain && activeGroup.domain !== 'none');
+  const { data: taxSummary } = useTaxSummary();
 
   const { data: debtsData, isLoading: debtsLoading } = useDebts();
   const { data: riskData, isLoading: riskLoading } = useGroupRisk();
@@ -122,31 +131,32 @@ export default function Overview() {
 
   const isLoading = debtsLoading || riskLoading;
 
-  // ─── Drag-to-reorder state ────────────────────────────────────────────────
+  // ─── Drag and Drop State & Handlers ──────────────────────────────────────────
   const [widgetOrder, setWidgetOrder] = useState<string[]>(getSavedWidgetOrder);
-  const dragItemRef = useRef<string | null>(null);
-  const dragOverItemRef = useRef<string | null>(null);
+  const draggedWidgetRef = useRef<string | null>(null);
 
   const handleDragStart = useCallback((widgetId: string) => {
-    dragItemRef.current = widgetId;
+    draggedWidgetRef.current = widgetId;
   }, []);
 
-  const handleDragOver = useCallback((e: React.DragEvent, widgetId: string) => {
+  const handleDragOver = useCallback((e: React.DragEvent, targetId: string) => {
     e.preventDefault();
-    dragOverItemRef.current = widgetId;
+    if (!draggedWidgetRef.current || draggedWidgetRef.current === targetId) return;
+
+    setWidgetOrder((prev) => {
+      const fromIndex = prev.indexOf(draggedWidgetRef.current!);
+      const toIndex = prev.indexOf(targetId);
+      if (fromIndex === -1 || toIndex === -1) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
   }, []);
 
   const handleDrop = useCallback(() => {
-    if (!dragItemRef.current || !dragOverItemRef.current || dragItemRef.current === dragOverItemRef.current) return;
-    const newOrder = [...widgetOrder];
-    const fromIdx = newOrder.indexOf(dragItemRef.current);
-    const toIdx = newOrder.indexOf(dragOverItemRef.current);
-    newOrder.splice(fromIdx, 1);
-    newOrder.splice(toIdx, 0, dragItemRef.current!);
-    setWidgetOrder(newOrder);
-    saveWidgetOrder(newOrder);
-    dragItemRef.current = null;
-    dragOverItemRef.current = null;
+    draggedWidgetRef.current = null;
+    saveWidgetOrder(widgetOrder);
   }, [widgetOrder]);
 
   const renderWidget = (id: string) => {
@@ -504,6 +514,160 @@ export default function Overview() {
           </div>
         </div>
       </div>
+
+      {/* Tax Summary Card (§2.2 D3-P) — Hidden in 'none' domain groups */}
+      {isTaxGroup && taxSummary && taxSummary.domain !== 'none' && (
+        <div
+          data-testid="tax-summary-card"
+          className="card animate-fade-in"
+          style={{
+            background: 'var(--bg-elevated)',
+            border: '1px solid #dcd5cb',
+            borderRadius: 'var(--border-radius)',
+            padding: 22,
+            marginBottom: 24,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 14 }}>
+            <div>
+              <div
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.68rem',
+                  color: '#c8502a',
+                  fontWeight: 700,
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  marginBottom: 2,
+                }}
+              >
+                Statutory Netting // {taxSummary.domain.toUpperCase()} Domain
+              </div>
+              <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
+                Tax Summary
+              </h3>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 4, marginBottom: 0 }}>
+                Breakdown of active taxable exposures and statutory add/deduct obligations.
+              </p>
+            </div>
+
+            {/* 3 Totals: Base, Tax, Payable */}
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <div
+                data-testid="tax-total-base"
+                style={{
+                  padding: '8px 14px',
+                  background: '#ffffff',
+                  border: '1px solid #dcd5cb',
+                  borderRadius: 4,
+                  minWidth: 100,
+                }}
+              >
+                <div style={{ fontSize: '0.68rem', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', fontWeight: 700 }}>
+                  BASE TOTAL
+                </div>
+                <div style={{ fontSize: '1.15rem', fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#0d2247' }}>
+                  ₹{taxSummary.grandBase.toLocaleString('en-IN')}
+                </div>
+              </div>
+
+              <div
+                data-testid="tax-total-tax"
+                style={{
+                  padding: '8px 14px',
+                  background: '#ffffff',
+                  border: '1px solid #dcd5cb',
+                  borderRadius: 4,
+                  minWidth: 100,
+                }}
+              >
+                <div style={{ fontSize: '0.68rem', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', fontWeight: 700 }}>
+                  TAX TOTAL
+                </div>
+                <div style={{ fontSize: '1.15rem', fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#c8502a' }}>
+                  ₹{taxSummary.grandTax.toLocaleString('en-IN')}
+                </div>
+              </div>
+
+              <div
+                data-testid="tax-total-payable"
+                style={{
+                  padding: '8px 14px',
+                  background: '#ffffff',
+                  border: '1px solid #0d2247',
+                  borderRadius: 4,
+                  minWidth: 100,
+                }}
+              >
+                <div style={{ fontSize: '0.68rem', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', fontWeight: 700 }}>
+                  PAYABLE TOTAL
+                </div>
+                <div style={{ fontSize: '1.15rem', fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#1e6b4b' }}>
+                  ₹{taxSummary.grandPayable.toLocaleString('en-IN')}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Recharts Bar Chart of tax by type: Add bars #c8502a, Deduct bars #16a34a */}
+          {taxSummary.totals.length > 0 ? (
+            <div style={{ height: 210, marginTop: 10 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={taxSummary.totals} margin={{ top: 10, right: 10, bottom: 20, left: 10 }}>
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fill: '#424d5d', fontSize: 11, fontFamily: 'JetBrains Mono' }}
+                    axisLine={{ stroke: '#dcd5cb' }}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fill: '#718096', fontSize: 10, fontFamily: 'JetBrains Mono' }}
+                    axisLine={{ stroke: '#dcd5cb' }}
+                    tickLine={false}
+                    tickFormatter={(v) => `₹${Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}`}
+                  />
+                  <RechartsTooltip
+                    contentStyle={{
+                      background: '#ffffff',
+                      border: '1px solid #0d2247',
+                      borderRadius: 2,
+                      fontSize: 12,
+                      fontFamily: 'JetBrains Mono',
+                      color: '#0d1829',
+                    }}
+                    formatter={(val: any, _name: any, item: any) => [
+                      `₹${Number(val).toLocaleString('en-IN')} (${item.payload.effect === 'deduct' ? 'Deduction' : 'Addition'})`,
+                      'Tax Amount',
+                    ]}
+                  />
+                  <Bar dataKey="taxTotal" radius={[3, 3, 0, 0]} barSize={34}>
+                    {taxSummary.totals.map((entry, index) => (
+                      <Cell
+                        key={`tax-cell-${index}`}
+                        fill={entry.effect === 'deduct' ? '#16a34a' : '#c8502a'}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, justifyContent: 'flex-end', marginTop: 4, fontSize: '0.72rem', fontFamily: 'var(--font-mono)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <div style={{ width: 8, height: 8, background: '#c8502a', borderRadius: 2 }} />
+                  <span style={{ color: 'var(--text-secondary)' }}>Add Effect</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <div style={{ width: 8, height: 8, background: '#16a34a', borderRadius: 2 }} />
+                  <span style={{ color: 'var(--text-secondary)' }}>Deduct Effect</span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem', fontFamily: 'var(--font-mono)' }}>
+              No tax-bearing debts registered under {taxSummary.domain.toUpperCase()} domain.
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Middle Widgets Grid — responsive */}
       <div

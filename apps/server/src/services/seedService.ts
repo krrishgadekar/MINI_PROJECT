@@ -18,6 +18,7 @@ import { PaymentEvent } from '../models/PaymentEvent';
 import { AuditLog } from '../models/AuditLog';
 import { IdempotencyRecord } from '../models/Idempotency';
 import { Notification } from '../models/Notification';
+import { applyTax } from '../tax/compute';
 
 export const DEFAULT_PASSWORD = 'CreditFlow@123';
 
@@ -105,6 +106,7 @@ export async function seedDatabase(options: { disconnectOnFinish?: boolean; sile
   // ── 2. Create Crawford Market group (all 8 merchants) ─────────────────────
   const crawfordGroup = await Group.create({
     name: 'Crawford Market',
+    domain: 'gst',
     type: 'market',
     ownerId: wholesaleA._id,
     inviteCode: 'CRAWFORD',
@@ -123,6 +125,7 @@ export async function seedDatabase(options: { disconnectOnFinish?: boolean; sile
   // ── 3. Create Supplier Circle group (Wholesale_A, Supplier_C, Logistics_E) ─
   const supplierCircleGroup = await Group.create({
     name: 'Supplier Circle',
+    domain: 'customs',
     type: 'supply_chain',
     ownerId: wholesaleA._id,
     inviteCode: 'SUPPLIER',
@@ -185,6 +188,9 @@ export async function seedDatabase(options: { disconnectOnFinish?: boolean; sile
         creditorId,
         amount: cfg.amount,
         originalAmount: cfg.amount,
+        baseAmount: cfg.amount,
+        taxAmount: 0,
+        taxBreakup: [],
         dueDate,
         note: cfg.note,
         status: 'active' as const,
@@ -227,9 +233,84 @@ export async function seedDatabase(options: { disconnectOnFinish?: boolean; sile
       createdAt: new Date(now.getTime() - 2 * dayMs),
     },
   ]);
-  log(`✅ Created ${crawfordActiveDebts.length} active and ${crawfordPendingDebts.length} pending debts in Crawford Market.`);
+  // ── 5b. Create 3 Taxed Debts for Crawford Market (GST Domain) ─────────────
+  const gstIntra18 = applyTax('gst', 'gst.intra', 10000, { gstRate: 18 });
+  const gstInter5 = applyTax('gst', 'gst.inter', 20000, { gstRate: 5 });
+  const gstIntra0 = applyTax('gst', 'gst.intra', 15000, { gstRate: 0 });
 
-  // ── 6. Create Debts for Supplier Circle (Active + Pending) ──────────────────
+  const crawfordTaxedDebts = await Debt.insertMany([
+    {
+      groupId: crawfordGroup._id,
+      debtorId: farmerF._id,
+      creditorId: wholesaleA._id,
+      amount: gstIntra18.payable,
+      originalAmount: gstIntra18.payable,
+      baseAmount: gstIntra18.baseAmount,
+      taxType: 'gst.intra',
+      taxEffect: gstIntra18.effect,
+      taxAmount: gstIntra18.taxAmount,
+      taxRate: gstIntra18.taxRate,
+      taxBreakup: gstIntra18.breakup,
+      taxInputs: { gstRate: 18 },
+      taxRuleVersion: gstIntra18.ruleVersion,
+      dueDate: new Date(now.getTime() + 12 * dayMs),
+      note: 'Cold-pressed sunflower oil invoice #GST-001 (18% intra-state)',
+      status: 'active' as const,
+      confirmedBy: wholesaleA._id,
+      createdBy: farmerF._id,
+      version: 0,
+      createdAt: new Date(now.getTime() - 10 * dayMs),
+    },
+    {
+      groupId: crawfordGroup._id,
+      debtorId: logisticsE._id,
+      creditorId: buyerH._id,
+      amount: gstInter5.payable,
+      originalAmount: gstInter5.payable,
+      baseAmount: gstInter5.baseAmount,
+      taxType: 'gst.inter',
+      taxEffect: gstInter5.effect,
+      taxAmount: gstInter5.taxAmount,
+      taxRate: gstInter5.taxRate,
+      taxBreakup: gstInter5.breakup,
+      taxInputs: { gstRate: 5 },
+      taxRuleVersion: gstInter5.ruleVersion,
+      dueDate: new Date(now.getTime() + 8 * dayMs),
+      note: 'Inter-state shipping & handling invoice #GST-002 (5% inter-state)',
+      status: 'active' as const,
+      confirmedBy: buyerH._id,
+      createdBy: logisticsE._id,
+      version: 0,
+      createdAt: new Date(now.getTime() - 7 * dayMs),
+    },
+    {
+      groupId: crawfordGroup._id,
+      debtorId: stallG._id,
+      creditorId: wholesaleA._id,
+      amount: gstIntra0.payable,
+      originalAmount: gstIntra0.payable,
+      baseAmount: gstIntra0.baseAmount,
+      taxType: 'gst.intra',
+      taxEffect: gstIntra0.effect,
+      taxAmount: gstIntra0.taxAmount,
+      taxRate: gstIntra0.taxRate,
+      taxBreakup: gstIntra0.breakup,
+      taxInputs: { gstRate: 0 },
+      taxRuleVersion: gstIntra0.ruleVersion,
+      dueDate: new Date(now.getTime() + 18 * dayMs),
+      note: 'Fresh organic greens & vegetables invoice #GST-003 (0% nil-rated)',
+      status: 'active' as const,
+      confirmedBy: wholesaleA._id,
+      createdBy: stallG._id,
+      version: 0,
+      createdAt: new Date(now.getTime() - 4 * dayMs),
+    },
+  ]);
+  log(`✅ Created ${crawfordActiveDebts.length} active, ${crawfordPendingDebts.length} pending, and ${crawfordTaxedDebts.length} taxed debts in Crawford Market.`);
+
+  // ── 6. Create Debts for Supplier Circle (Active + Pending + Customs Taxed) ─
+  const customsImportTax = applyTax('customs', 'customs.import', 500000, { bcdRate: 7.5, igstRate: 18 });
+
   const supplierCircleDebts = await Debt.insertMany([
     {
       groupId: supplierCircleGroup._id,
@@ -237,6 +318,9 @@ export async function seedDatabase(options: { disconnectOnFinish?: boolean; sile
       creditorId: wholesaleA._id,
       amount: 12000,
       originalAmount: 12000,
+      baseAmount: 12000,
+      taxAmount: 0,
+      taxBreakup: [],
       dueDate: new Date(now.getTime() + 2 * dayMs), // Due in 2 days
       note: 'Supplier Circle wholesale spices advance',
       status: 'active' as const,
@@ -251,6 +335,9 @@ export async function seedDatabase(options: { disconnectOnFinish?: boolean; sile
       creditorId: supplierC._id,
       amount: 8000,
       originalAmount: 8000,
+      baseAmount: 8000,
+      taxAmount: 0,
+      taxBreakup: [],
       dueDate: new Date(now.getTime() - 4 * dayMs), // Overdue by 4 days
       note: 'Supplier Circle freight fees',
       status: 'active' as const,
@@ -265,6 +352,9 @@ export async function seedDatabase(options: { disconnectOnFinish?: boolean; sile
       creditorId: logisticsE._id,
       amount: 6000,
       originalAmount: 6000,
+      baseAmount: 6000,
+      taxAmount: 0,
+      taxBreakup: [],
       dueDate: new Date(now.getTime() + 15 * dayMs), // Future
       note: 'Supplier Circle loading equipment maintenance',
       status: 'active' as const,
@@ -276,9 +366,34 @@ export async function seedDatabase(options: { disconnectOnFinish?: boolean; sile
     {
       groupId: supplierCircleGroup._id,
       debtorId: logisticsE._id,
+      creditorId: wholesaleA._id,
+      amount: customsImportTax.payable,
+      originalAmount: customsImportTax.payable,
+      baseAmount: customsImportTax.baseAmount,
+      taxType: 'customs.import',
+      taxEffect: customsImportTax.effect,
+      taxAmount: customsImportTax.taxAmount,
+      taxRate: customsImportTax.taxRate,
+      taxBreakup: customsImportTax.breakup,
+      taxInputs: { bcdRate: 7.5, igstRate: 18 },
+      taxRuleVersion: customsImportTax.ruleVersion,
+      dueDate: new Date(now.getTime() + 10 * dayMs),
+      note: 'Imported container customs clearance #CUST-901 (BCD 7.5% + SWS + IGST 18%)',
+      status: 'active' as const,
+      confirmedBy: wholesaleA._id,
+      createdBy: logisticsE._id,
+      version: 0,
+      createdAt: new Date(now.getTime() - 3 * dayMs),
+    },
+    {
+      groupId: supplierCircleGroup._id,
+      debtorId: logisticsE._id,
       creditorId: supplierC._id,
       amount: 4500,
       originalAmount: 4500,
+      baseAmount: 4500,
+      taxAmount: 0,
+      taxBreakup: [],
       dueDate: new Date(now.getTime() + 20 * dayMs),
       note: 'Pallet return freight charge - pending approval',
       status: 'pending' as const,
@@ -526,7 +641,7 @@ export async function seedDatabase(options: { disconnectOnFinish?: boolean; sile
   log(`✅ Created ${createdNotifications.length} sample Notification records.`);
 
   // ── 10. Seed Initial AuditLog Entries ─────────────────────────────────────
-  const allCrawfordDebts = [...crawfordActiveDebts, ...crawfordPendingDebts];
+  const allCrawfordDebts = [...crawfordActiveDebts, ...crawfordPendingDebts, ...crawfordTaxedDebts];
   const auditLogsToInsert = [
     ...allCrawfordDebts.map((d) => ({
       groupId: crawfordGroup._id,
@@ -558,7 +673,7 @@ export async function seedDatabase(options: { disconnectOnFinish?: boolean; sile
     console.log('================================================================================');
     console.log(`Default password for all accounts: ${DEFAULT_PASSWORD}`);
     console.log('--------------------------------------------------------------------------------');
-    console.log('GROUP 1: Crawford Market (Invite code: CRAWFORD)');
+    console.log('GROUP 1: Crawford Market (Invite code: CRAWFORD) [Domain: gst]');
     console.log('  Role: Owner/Admin  → Wholesale_A  (wholesale.a@demo.com)');
     console.log('  Role: Admin        → Retailer_B   (retailer.b@demo.com)');
     console.log('  Role: High Risk    → Supplier_C   (supplier.c@demo.com) — CRITICAL (p < 0.05)');
@@ -568,7 +683,7 @@ export async function seedDatabase(options: { disconnectOnFinish?: boolean; sile
     console.log('  Role: Member       → Stall_G      (stall.g@demo.com)');
     console.log('  Role: Member       → Buyer_H      (buyer.h@demo.com)');
     console.log('--------------------------------------------------------------------------------');
-    console.log('GROUP 2: Supplier Circle (Invite code: SUPPLIER)');
+    console.log('GROUP 2: Supplier Circle (Invite code: SUPPLIER) [Domain: customs]');
     console.log('  Members: Wholesale_A (owner), Supplier_C (admin), Logistics_E (member)');
     console.log('--------------------------------------------------------------------------------');
     console.log('KEY DEMO SCENARIOS PREPARED:');
@@ -577,6 +692,12 @@ export async function seedDatabase(options: { disconnectOnFinish?: boolean; sile
     console.log('  2. Hypothesis Z-Test Risk: Supplier_C has 8 late events (p < 0.001, CRITICAL risk).');
     console.log('  3. Pending Approvals: Farmer_F requested ₹7,500 from Stall_G; Vendor_D has ₹12,000 request.');
     console.log('  4. Overdue Debts: Retailer_B (-5d), Wholesale_A (-8d), Logistics_E (-3d).');
+    console.log('  5. GST Compliance Invoices (Crawford Market):');
+    console.log('     - gst.intra (18%): Base ₹10,000 + CGST ₹900 + SGST ₹900 = Payable ₹11,800');
+    console.log('     - gst.inter (5%):  Base ₹20,000 + IGST ₹1,000 = Payable ₹21,000');
+    console.log('     - gst.intra (0%):  Base ₹15,000 (nil-rated exempt) = Payable ₹15,000');
+    console.log('  6. Customs Import Tariff Line (Supplier Circle):');
+    console.log('     - customs.import: Base ₹5,00,000, BCD 7.5% (₹37,500), SWS 10% (₹3,750), IGST 18% (₹97,425) = Payable ₹6,38,675');
     console.log('================================================================================\n');
   }
 

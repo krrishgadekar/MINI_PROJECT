@@ -124,7 +124,7 @@ export const getTaxSummary = async (
     const query: Record<string, any> = {
       groupId: new mongoose.Types.ObjectId(groupId),
       taxType: { $exists: true, $ne: null },
-      status: { $ne: 'cancelled' },
+      status: { $nin: ['settled', 'cancelled'] },
     };
 
     if (role === 'member') {

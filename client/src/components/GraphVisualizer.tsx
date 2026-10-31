@@ -452,7 +452,7 @@ export default function GraphVisualizer({
         d3AlphaDecay={0.015}
         d3VelocityDecay={0.25}
         warmupTicks={50}
-        // auto-fit on initial render
+        onEngineStop={() => fgRef.current?.zoomToFit(400, 50)}
         enablePointerInteraction={true}
       />
 

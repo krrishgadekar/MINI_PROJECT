@@ -93,3 +93,4 @@ All 47 tests passed:
 
 - **CSV Export Columns in Legacy Groups**: The spec noted *"In `'none'` groups keep old columns"*. Implemented dynamic header and row serialization based on the active group's domain: tax groups include `baseAmount, taxType, taxAmount`, while legacy groups maintain the original 13 columns to prevent breaking existing CSV consumers.
 - **Settlement Cycles with External Python Engine**: During Jest unit testing, the Python optimization engine is mocked at the HTTP bridge level to assert that the Node/Express server provides the PAYABLE `amount` to the graph optimizer and that the resulting netted balances sum to zero.
+

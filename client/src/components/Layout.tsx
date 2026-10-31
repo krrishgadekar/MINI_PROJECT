@@ -7,7 +7,6 @@ import { useNotifications } from '../hooks/useNotifications';
 import { useSocket } from '../hooks/useSocket';
 import { useAuth } from '../state/AuthProvider';
 import Logo from './Logo';
-import Footer from './Footer';
 
 import DemoPresentationBar from './DemoPresentationBar';
 
@@ -15,7 +14,7 @@ import DemoPresentationBar from './DemoPresentationBar';
  * Layout — App shell with responsive sidebar + topbar + content area.
  */
 export default function Layout() {
-  const { toggleSidebar } = useUiStore();
+  const { toggleSidebar, sidebarCollapsed } = useUiStore();
   const navigate = useNavigate();
   const { logout } = useAuth();
   const { data: notifData } = useNotifications();
@@ -25,7 +24,7 @@ export default function Layout() {
   useSocket();
 
   return (
-    <div className="app-layout">
+    <div className={`app-layout ${sidebarCollapsed ? 'sidebar-is-collapsed' : ''}`}>
       {/* Global Command Palette (Ctrl+K / Cmd+K) */}
       <CommandPalette />
 
@@ -121,7 +120,6 @@ export default function Layout() {
         <div style={{ flex: 1 }}>
           <Outlet />
         </div>
-        <Footer />
       </main>
     </div>
   );

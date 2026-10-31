@@ -130,3 +130,4 @@ Build execution: `npm --prefix client run build`:
 
 ## 3. Contract Deviations
 None. All data shapes, routes, test vectors, and error codes match Section 2 of `TAX_PHASE_PROMPTS.md` and the shared contract.
+

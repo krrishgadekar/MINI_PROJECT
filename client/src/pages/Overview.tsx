@@ -47,7 +47,7 @@ function saveWidgetOrder(order: string[]) {
 function DragHandle() {
   return (
     <div
-      title="Drag to reorder widget"
+      title="Drag to reorder"
       aria-label="Drag handle — reorder widget"
       style={{
         cursor: 'grab',
@@ -55,11 +55,11 @@ function DragHandle() {
         display: 'flex',
         alignItems: 'center',
         padding: '0 4px',
-        opacity: 0.6,
+        opacity: 0.4,
         transition: 'opacity var(--transition-fast)',
       }}
-      onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-      onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.6')}
+      onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.8')}
+      onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.4')}
     >
       <GripVertical size={15} aria-hidden="true" />
     </div>
@@ -104,19 +104,19 @@ export default function Overview() {
 
   const exposureData = useMemo(() => {
     const buckets: Record<string, number> = {
-      'Low Risk (<0.33)': 0,
-      'Medium Risk (0.33-0.66)': 0,
-      'Elevated Risk (>0.66)': 0,
+      'Low': 0,
+      'Medium': 0,
+      'High': 0,
     };
     activeDebts.forEach((d: any) => {
-      if (d.amount > 10000) buckets['Elevated Risk (>0.66)'] += d.amount;
-      else if (d.amount > 4000) buckets['Medium Risk (0.33-0.66)'] += d.amount;
-      else buckets['Low Risk (<0.33)'] += d.amount;
+      if (d.amount > 10000) buckets['High'] += d.amount;
+      else if (d.amount > 4000) buckets['Medium'] += d.amount;
+      else buckets['Low'] += d.amount;
     });
     return [
-      { name: 'Low Risk', value: buckets['Low Risk (<0.33)'] || 12000, color: '#1e6b4b' },
-      { name: 'Medium Risk', value: buckets['Medium Risk (0.33-0.66)'] || 18000, color: '#c27814' },
-      { name: 'Elevated Risk', value: buckets['Elevated Risk (>0.66)'] || 8500, color: '#c8502a' },
+      { name: 'Low Risk', value: buckets['Low'] || 12000, color: '#1e6b4b' },
+      { name: 'Medium Risk', value: buckets['Medium'] || 18000, color: '#c27814' },
+      { name: 'High Risk', value: buckets['High'] || 8500, color: '#c8502a' },
     ];
   }, [activeDebts]);
 
@@ -162,27 +162,19 @@ export default function Overview() {
             className="card"
             style={{
               padding: 22,
-              background: '#ffffff',
-              border: '1px solid #dcd5cb',
-              borderRadius: 4,
-              boxShadow: '0 1px 3px rgba(13, 24, 41, 0.04)',
+              borderRadius: 'var(--border-radius)',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <DragHandle />
-                <div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: '#c8502a', fontWeight: 700 }}>
-                    [RADAR // 01]
-                  </div>
-                  <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.05rem', fontWeight: 700, color: '#0d2247' }}>
-                    Risk-Weighted Exposure
-                  </h3>
-                </div>
+                <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  Debt by Risk Level
+                </h3>
               </div>
             </div>
-            <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: 14 }}>
-              Distribution of active obligation balances by assessed risk tier.
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: 14 }}>
+              How your active debts are spread across risk categories.
             </p>
             <div style={{ height: 180 }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -196,12 +188,12 @@ export default function Overview() {
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12, fontSize: '0.78rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12, fontSize: '0.82rem' }}>
               {exposureData.map((item) => (
                 <div key={item.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ width: 8, height: 8, background: item.color, borderRadius: 1 }} aria-hidden="true" />
-                    <span style={{ color: '#424d5d', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>{item.name}</span>
+                    <div style={{ width: 8, height: 8, background: item.color, borderRadius: '50%' }} aria-hidden="true" />
+                    <span style={{ color: 'var(--text-secondary)' }}>{item.name}</span>
                   </div>
                   <span style={{ fontWeight: 700, fontFamily: 'var(--font-mono)' }}>₹{item.value.toLocaleString('en-IN')}</span>
                 </div>
@@ -221,50 +213,31 @@ export default function Overview() {
             className="card"
             style={{
               padding: 22,
-              background: '#ffffff',
-              border: '1px solid #dcd5cb',
-              borderRadius: 4,
-              boxShadow: '0 1px 3px rgba(13, 24, 41, 0.04)',
+              borderRadius: 'var(--border-radius)',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <DragHandle />
                 <div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: '#c8502a', fontWeight: 700 }}>
-                    [TIMELINE // 02]
-                  </div>
-                  <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.05rem', fontWeight: 700, color: '#0d2247' }}>
-                    Upcoming Maturing Obligations
+                  <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    Payments Due Soon
                   </h3>
-                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                    Debts with contractual due dates in the next 7 business days
+                  <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                    Debts due within the next 7 days
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => navigate('/ledger')}
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #dcd5cb',
-                  color: '#0d2247',
-                  padding: '5px 10px',
-                  borderRadius: 2,
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '0.72rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 4,
-                }}
+                className="btn btn-sm btn-secondary"
               >
-                ALL DEBTS <ArrowRight size={11} aria-hidden="true" />
+                View All <ArrowRight size={12} aria-hidden="true" />
               </button>
             </div>
             {dueSoonDebts.length === 0 ? (
-              <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
-                No obligations maturing within the next 7 days.
+              <div style={{ padding: '28px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                No payments due in the next 7 days 🎉
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -276,54 +249,43 @@ export default function Overview() {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      padding: '10px 14px',
-                      background: '#faf8f4',
-                      borderRadius: 2,
+                      padding: '12px 14px',
+                      background: 'var(--bg-secondary)',
+                      borderRadius: 'var(--border-radius-sm)',
                       cursor: 'pointer',
-                      border: '1px solid #e8e2d8',
+                      border: '1px solid var(--border-primary)',
                       transition: 'all 0.15s ease',
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <div
                         style={{
-                          width: 24,
-                          height: 24,
-                          background: '#0d2247',
+                          width: 28,
+                          height: 28,
+                          background: 'var(--brand-navy)',
                           color: '#ffffff',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          borderRadius: 2,
+                          borderRadius: 6,
                         }}
                       >
-                        <CreditCard size={12} aria-hidden="true" />
+                        <CreditCard size={14} aria-hidden="true" />
                       </div>
                       <div>
-                        <div style={{ fontWeight: 700, fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: '#0d1829' }}>
+                        <div style={{ fontWeight: 700, fontFamily: 'var(--font-mono)', fontSize: '0.9rem', color: 'var(--text-primary)' }}>
                           ₹{debt.amount.toLocaleString('en-IN')}
                         </div>
-                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                          {debt.note || 'Bilateral trade credit'}
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                          {debt.note || 'Trade credit'}
                         </div>
                       </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span
-                        style={{
-                          padding: '2px 6px',
-                          border: '1px solid #c27814',
-                          background: 'rgba(194, 120, 20, 0.08)',
-                          color: '#c27814',
-                          fontFamily: 'var(--font-mono)',
-                          fontSize: '0.68rem',
-                          fontWeight: 700,
-                          borderRadius: 2,
-                        }}
-                      >
-                        DUE {debt.dueDate ? new Date(debt.dueDate).toLocaleDateString() : 'SOON'}
+                      <span className="status-badge status-pending" style={{ fontSize: '0.7rem' }}>
+                        Due {debt.dueDate ? new Date(debt.dueDate).toLocaleDateString() : 'Soon'}
                       </span>
-                      <ArrowRight size={12} color="#a1988a" aria-hidden="true" />
+                      <ArrowRight size={14} color="var(--text-muted)" aria-hidden="true" />
                     </div>
                   </div>
                 ))}
@@ -343,69 +305,46 @@ export default function Overview() {
             className="card"
             style={{
               padding: 22,
-              background: '#fcfbf8',
-              border: '1px solid #dcd5cb',
-              borderRadius: 4,
+              borderRadius: 'var(--border-radius)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               flexWrap: 'wrap',
               gap: 16,
-              boxShadow: '0 1px 3px rgba(13, 24, 41, 0.04)',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
               <DragHandle />
               <div
                 style={{
-                  width: 40,
-                  height: 40,
-                  border: '1.5px solid #0d2247',
+                  width: 44,
+                  height: 44,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  background: '#0d2247',
+                  background: 'var(--brand-navy)',
                   color: '#ffffff',
-                  borderRadius: 2,
+                  borderRadius: 'var(--border-radius-sm)',
                   flexShrink: 0,
                 }}
               >
-                <Share2 size={20} aria-hidden="true" />
+                <Share2 size={22} aria-hidden="true" />
               </div>
               <div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: '#c8502a', fontWeight: 700 }}>
-                  [TOPOLOGY GRAPH // 03]
-                </div>
-                <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', fontWeight: 700, color: '#0d2247' }}>
-                  Interactive Credit Network Graph
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  Credit Network Map
                 </h3>
-                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                  Explore Tarjan Strongly Connected Components (SCCs), cycle netting, and systemic risk rings.
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', maxWidth: 400 }}>
+                  See how all merchants are connected — find payment cycles and settle debts faster.
                 </p>
               </div>
             </div>
 
             <button
               onClick={() => navigate('/network')}
-              style={{
-                background: '#0d2247',
-                color: '#ffffff',
-                border: '1px solid #0d2247',
-                padding: '9px 18px',
-                borderRadius: 2,
-                fontFamily: 'var(--font-mono)',
-                fontSize: '0.78rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
-                transition: 'all 0.15s ease',
-              }}
+              className="btn btn-primary"
             >
-              <div style={{ width: 8, height: 8, background: '#c8502a', borderRadius: 1 }} />
-              <span>EXPLORE NETWORK</span>
-              <ArrowRight size={13} aria-hidden="true" />
+              Open Network <ArrowRight size={15} aria-hidden="true" />
             </button>
           </div>
         );
@@ -419,93 +358,52 @@ export default function Overview() {
     <div className="animate-fade-in" style={{ padding: '0 4px' }}>
       <a href="#main-content" className="skip-link">Skip to main content</a>
 
-      {/* Top Banner & Title — Architectural Editorial Style */}
+      {/* Page Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 14 }}>
         <div>
-          <div
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: '0.68rem',
-              color: '#c8502a',
-              fontWeight: 700,
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              marginBottom: 4,
-            }}
-          >
-            [SPECIFICATION 01 // OVERVIEW RADAR]
-          </div>
           <h1
             style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: '1.95rem',
+              fontSize: '1.75rem',
               fontWeight: 700,
-              color: '#0d2247',
+              color: 'var(--text-primary)',
               letterSpacing: '-0.025em',
               lineHeight: 1.2,
             }}
           >
-            System Portfolio &amp; Debt Network
+            Overview
           </h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: 4 }}>
-            Real-time multi-tenant debt settlement matrix, Poisson liquidity radar, and risk exposure.
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: 4 }}>
+            Your debt summary, risk snapshot, and upcoming payments at a glance.
           </p>
         </div>
 
         <div style={{ display: 'flex', gap: 8 }}>
           <button
             onClick={() => navigate('/settle')}
-            style={{
-              background: '#ffffff',
-              color: '#0d2247',
-              border: '1px solid #dcd5cb',
-              padding: '8px 14px',
-              borderRadius: 2,
-              fontFamily: 'var(--font-mono)',
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-            }}
+            className="btn btn-secondary"
           >
-            <GitCommit size={14} aria-hidden="true" />
-            <span>SETTLE MATRIX</span>
+            <GitCommit size={16} aria-hidden="true" />
+            Settle Debts
           </button>
 
           <button
             onClick={() => navigate('/network')}
-            style={{
-              background: '#0d2247',
-              color: '#ffffff',
-              border: '1px solid #0d2247',
-              padding: '8px 14px',
-              borderRadius: 2,
-              fontFamily: 'var(--font-mono)',
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-            }}
+            className="btn btn-primary"
           >
-            <div style={{ width: 8, height: 8, background: '#c8502a', borderRadius: 1 }} />
-            <span>VISUALIZER</span>
+            View Network
           </button>
         </div>
       </div>
 
-      {/* Critical Overdue Alert Banner */}
+      {/* Overdue Alert */}
       {overdueDebts.length > 0 && (
         <div
           role="alert"
           style={{
             padding: '14px 18px',
-            borderRadius: 2,
-            background: 'rgba(200, 80, 42, 0.08)',
-            border: '1px solid #c8502a',
+            borderRadius: 'var(--border-radius-sm)',
+            background: 'var(--color-danger-bg)',
+            border: '1px solid rgba(200, 80, 42, 0.3)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -515,151 +413,108 @@ export default function Overview() {
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <AlertTriangle size={20} color="#c8502a" aria-hidden="true" />
+            <AlertTriangle size={20} color="var(--color-danger)" aria-hidden="true" />
             <div>
-              <div style={{ fontWeight: 700, color: '#c8502a', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
-                {overdueDebts.length} OVERDUE OBLIGATION{overdueDebts.length > 1 ? 'S' : ''} DETECTED
+              <div style={{ fontWeight: 700, color: 'var(--color-danger)', fontSize: '0.85rem' }}>
+                {overdueDebts.length} Overdue Payment{overdueDebts.length > 1 ? 's' : ''}
               </div>
-              <div style={{ fontSize: '0.78rem', color: '#424d5d' }}>
-                Total overdue balance: ₹{overdueDebts.reduce((s: number, d: any) => s + d.amount, 0).toLocaleString('en-IN')}. Netting cycles recommended to restore liquidity.
+              <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                Total overdue: ₹{overdueDebts.reduce((s: number, d: any) => s + d.amount, 0).toLocaleString('en-IN')}
               </div>
             </div>
           </div>
           <button
             onClick={() => navigate('/ledger')}
-            style={{
-              background: '#c8502a',
-              color: '#ffffff',
-              border: '1px solid #c8502a',
-              padding: '5px 12px',
-              borderRadius: 2,
-              fontFamily: 'var(--font-mono)',
-              fontSize: '0.72rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
+            className="btn btn-sm btn-terracotta"
           >
-            REVIEW IN LEDGER
+            Review Now
           </button>
         </div>
       )}
 
-      {/* Primary 4 Metric Cards — Architectural Spec Cards */}
+      {/* 4 Metric Cards */}
       <div
         id="main-content"
         role="region"
-        aria-label="Portfolio summary metrics"
+        aria-label="Key metrics"
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
           gap: 16,
-          marginBottom: 20,
+          marginBottom: 24,
         }}
       >
-        <div
-          className="stat-card"
-          style={{
-            background: '#ffffff',
-            border: '1px solid #dcd5cb',
-            borderRadius: 4,
-            padding: '18px 20px',
-            position: 'relative',
-          }}
-        >
+        <div className="stat-card">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 700 }}>
-              ① ACTIVE DEBT OUTSTANDING
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+              Total Active Debts
             </span>
-            <Receipt size={16} color="#0d2247" aria-hidden="true" />
+            <Receipt size={18} color="var(--brand-navy)" aria-hidden="true" />
           </div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.9rem', fontWeight: 700, color: '#0d2247' }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-primary)' }}>
             ₹{isLoading ? '...' : totalOutstanding.toLocaleString('en-IN')}
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
-            {activeDebts.length} active bilateral obligations
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 4 }}>
+            {activeDebts.length} active debt{activeDebts.length !== 1 ? 's' : ''}
           </div>
         </div>
 
-        <div
-          className="stat-card"
-          style={{
-            background: '#ffffff',
-            border: '1px solid #dcd5cb',
-            borderRadius: 4,
-            padding: '18px 20px',
-          }}
-        >
+        <div className="stat-card">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 700 }}>
-              ② PORTFOLIO DEFAULT RISK
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+              Risk Score
             </span>
-            <TrendingUp size={16} color="#c27814" aria-hidden="true" />
+            <TrendingUp size={18} color="var(--color-warning)" aria-hidden="true" />
           </div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.9rem', fontWeight: 700, color: avgRisk < 0.3 ? '#1e6b4b' : '#c8502a' }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.75rem', fontWeight: 700, color: avgRisk < 0.3 ? 'var(--color-success)' : 'var(--color-danger)' }}>
             {isLoading ? '...' : `${(avgRisk * 100).toFixed(1)}%`}
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
-            {highRiskCount} merchant{highRiskCount === 1 ? '' : 's'} on elevated watchlist
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 4 }}>
+            {highRiskCount} high-risk merchant{highRiskCount === 1 ? '' : 's'}
           </div>
         </div>
 
-        <div
-          className="stat-card"
-          style={{
-            background: '#ffffff',
-            border: '1px solid #dcd5cb',
-            borderRadius: 4,
-            padding: '18px 20px',
-          }}
-        >
+        <div className="stat-card">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 700 }}>
-              ③ DUE IN NEXT 7 DAYS
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+              Due This Week
             </span>
-            <Clock size={16} color="#c8502a" aria-hidden="true" />
+            <Clock size={18} color="var(--color-danger)" aria-hidden="true" />
           </div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.9rem', fontWeight: 700, color: '#0d2247' }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-primary)' }}>
             {isLoading ? '...' : dueSoonDebts.length}
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
-            ₹{dueSoonDebts.reduce((s: number, d: any) => s + d.amount, 0).toLocaleString('en-IN')} liquidity demand
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 4 }}>
+            ₹{dueSoonDebts.reduce((s: number, d: any) => s + d.amount, 0).toLocaleString('en-IN')} total
           </div>
         </div>
 
-        <div
-          className="stat-card"
-          style={{
-            background: '#ffffff',
-            border: '1px solid #dcd5cb',
-            borderRadius: 4,
-            padding: '18px 20px',
-          }}
-        >
+        <div className="stat-card">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 700 }}>
-              ④ UNREAD ALERTS &amp; INBOX
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+              Unread Alerts
             </span>
-            <ShieldAlert size={16} color="#0d2247" aria-hidden="true" />
+            <ShieldAlert size={18} color="var(--brand-navy)" aria-hidden="true" />
           </div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.9rem', fontWeight: 700, color: unreadCount > 0 ? '#c8502a' : '#1e6b4b' }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.75rem', fontWeight: 700, color: unreadCount > 0 ? 'var(--color-danger)' : 'var(--color-success)' }}>
             {unreadCount}
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
-            Direct counterparty notifications
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 4 }}>
+            Notifications waiting
           </div>
         </div>
       </div>
 
-      {/* Draggable Middle Grid Widgets */}
+      {/* Middle Widgets Grid — responsive */}
       <div
         role="region"
-        aria-label="Customizable dashboard widgets"
-        style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 16, marginBottom: 16 }}
+        aria-label="Dashboard widgets"
+        className="overview-widget-grid"
       >
         {widgetOrder.slice(0, 2).map(renderWidget)}
       </div>
 
-      {/* Network Banner (third widget) */}
+      {/* Network Banner */}
       {renderWidget(widgetOrder[2])}
     </div>
   );

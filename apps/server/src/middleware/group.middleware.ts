@@ -1,7 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from './auth.middleware';
 import { AppError } from '../utils/errors';
-import { Membership, IGroup } from '../models/Group';
+import { Membership, IGroup, TaxDomain } from '../models/Group';
 import mongoose from 'mongoose';
 
 export type GroupRole = 'owner' | 'admin' | 'member';
@@ -11,6 +11,7 @@ export interface GroupRequest extends AuthRequest {
   group?: {
     id: string;
     name?: string;
+    domain?: TaxDomain;
   };
   role?: GroupRole;
 }
@@ -49,7 +50,7 @@ export const requireGroup = async (
     const membership = await Membership.findOne({
       groupId: new mongoose.Types.ObjectId(groupId),
       merchantId,
-    }).populate<{ groupId: IGroup }>('groupId', 'name');
+    }).populate<{ groupId: IGroup }>('groupId', 'name domain');
 
     if (!membership) {
       return next(
@@ -57,11 +58,13 @@ export const requireGroup = async (
       );
     }
 
+    const grp = membership.groupId as unknown as IGroup;
     req.groupId = groupId;
     req.role = membership.role as GroupRole;
     req.group = {
       id: groupId,
-      name: (membership.groupId as unknown as IGroup)?.name ?? `Group ${groupId}`,
+      name: grp?.name ?? `Group ${groupId}`,
+      domain: grp?.domain ?? 'none',
     };
 
     next();

@@ -60,7 +60,7 @@ export default function Settle() {
               marginBottom: 4,
             }}
           >
-            [SPECIFICATION 04 // GREEDY CASH FLOW REDUCTION]
+            Settlement Optimizer
           </div>
           <h1
             style={{
@@ -72,10 +72,10 @@ export default function Settle() {
               lineHeight: 1.2,
             }}
           >
-            Multi-Party Settlement Optimizer
+            Debt Settlement Optimizer
           </h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: 4 }}>
-            Graph cycle cancellation (Tarjan SCC) and bipartite cash flow minimization algorithm.
+            Automatically find circular debts and settle them to minimize total cash payments.
           </p>
         </div>
 

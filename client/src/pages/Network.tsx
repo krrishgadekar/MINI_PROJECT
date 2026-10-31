@@ -115,7 +115,7 @@ export default function Network() {
               marginBottom: 4,
             }}
           >
-            [SPECIFICATION 02 // DIRECTED GRAPH TOPOLOGY]
+            Network Explorer
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <h1
@@ -128,7 +128,7 @@ export default function Network() {
                 lineHeight: 1.2,
               }}
             >
-              Obligation Network &amp; Cascade Graph
+              Credit Network Map
             </h1>
             <span
               style={{
@@ -142,11 +142,11 @@ export default function Network() {
                 fontWeight: 700,
               }}
             >
-              {merchants.length} NODES · {debts.length} EDGES
+              {merchants.length} Merchants · {debts.length} Debts
             </span>
           </div>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: 4 }}>
-            Multi-tenant debt topology visualizer with client-side BFS traversal and systemic default contagion shading.
+            Interactive map showing how merchants are connected by debts and transaction flows.
           </p>
         </div>
 
@@ -169,7 +169,7 @@ export default function Network() {
             }}
           >
             <ShieldAlert size={14} color="#c8502a" aria-hidden="true" />
-            <span>RISK RADAR</span>
+            <span>Risk Analysis</span>
           </button>
           <button
             onClick={() => navigate('/settle')}

@@ -9,6 +9,7 @@ import {
   removeMember,
   rotateInviteCode,
   inviteMember,
+  setGroupDomain,
 } from '../controllers/groups.controller';
 import { protect } from '../middleware/auth.middleware';
 import { requireGroup, requireRole } from '../middleware/group.middleware';
@@ -101,3 +102,13 @@ groupsRouter.post(
   inviteMember,
 );
 
+groupsRouter.patch(
+  '/:id/domain',
+  (req, _res, next) => {
+    req.headers['x-group-id'] = req.params.id;
+    next();
+  },
+  requireGroup,
+  requireRole('admin'),
+  setGroupDomain,
+);

@@ -2,9 +2,9 @@ import { Response, NextFunction } from 'express';
 import { z } from 'zod';
 import mongoose from 'mongoose';
 import { GroupRequest } from '../middleware/group.middleware';
-import { Debt, IDebt } from '../models/Debt';
+import { Debt, IDebt, ITaxBreakupItem } from '../models/Debt';
 import { Merchant } from '../models/Merchant';
-import { Membership } from '../models/Group';
+import { Group, Membership, TaxDomain } from '../models/Group';
 import { Payment, PaymentKind } from '../models/Payment';
 import { PaymentEvent } from '../models/PaymentEvent';
 import { AuditLog } from '../models/AuditLog';
@@ -15,11 +15,17 @@ import { parsePaginationParams } from '../utils/paginate';
 import { emitToGroup } from '../realtime/socket';
 import { notify } from '../utils/notify';
 import { AppError, ValidationError } from '../utils/errors';
+import { applyTax } from '../tax';
 
 const CreateDebtSchema = z.object({
-  debtorId: z.string(),
-  creditorId: z.string(),
-  amount: z.number().positive(),
+  debtorId: z.string().optional(),
+  debtor: z.string().optional(),
+  creditorId: z.string().optional(),
+  creditor: z.string().optional(),
+  amount: z.number().positive().optional(),
+  baseAmount: z.number().positive().optional(),
+  taxType: z.string().optional(),
+  taxInputs: z.record(z.any()).optional(),
   dueDate: z.string().optional(),
   note: z.string().optional(),
 });
@@ -231,8 +237,67 @@ export const createDebt = async (
       return;
     }
 
-    const { debtorId: debtorKey, creditorId: creditorKey, amount, dueDate, note } = parsed.data;
+    const debtorKey = (req.body.debtorId || req.body.debtor) as string | undefined;
+    const creditorKey = (req.body.creditorId || req.body.creditor) as string | undefined;
+
+    if (!debtorKey || !creditorKey) {
+      res.status(400).json({
+        success: false,
+        code: 'VALIDATION',
+        message: 'debtor and creditor are required.',
+      });
+      return;
+    }
+
     const groupId = req.groupId;
+    let groupDomain: TaxDomain = (req.group?.domain || 'none') as TaxDomain;
+    if (groupId) {
+      const grp = await Group.findById(groupId);
+      if (grp?.domain) {
+        groupDomain = grp.domain;
+      }
+    }
+
+    const hasTaxFields =
+      req.body.taxType !== undefined ||
+      req.body.taxInputs !== undefined ||
+      (req.body.baseAmount !== undefined && req.body.amount === undefined);
+
+    if (groupDomain === 'none') {
+      if (hasTaxFields) {
+        throw new AppError(
+          400,
+          'DOMAIN_REQUIRED',
+          'Tax debts cannot be created in a non-tax group (domain: none).',
+        );
+      }
+      if (req.body.amount === undefined || typeof req.body.amount !== 'number' || req.body.amount <= 0) {
+        res.status(400).json({
+          success: false,
+          code: 'VALIDATION',
+          message: 'amount is required and must be positive.',
+        });
+        return;
+      }
+    } else {
+      // In a tax group, require baseAmount and taxType; server IGNORES client amount
+      if (req.body.baseAmount === undefined || typeof req.body.baseAmount !== 'number' || req.body.baseAmount <= 0) {
+        res.status(400).json({
+          success: false,
+          code: 'VALIDATION',
+          message: 'baseAmount is required and must be positive in a tax group.',
+        });
+        return;
+      }
+      if (!req.body.taxType || typeof req.body.taxType !== 'string') {
+        res.status(400).json({
+          success: false,
+          code: 'VALIDATION',
+          message: 'taxType is required in a tax group.',
+        });
+        return;
+      }
+    }
 
     const findMerchant = async (key: string) => {
       if (mongoose.isValidObjectId(key)) {
@@ -290,21 +355,63 @@ export const createDebt = async (
       }
     }
 
+    let payableAmount: number;
+    let originalAmount: number;
+    let baseAmount: number;
+    let taxType: string | undefined;
+    let taxEffect: 'add' | 'deduct' | undefined;
+    let taxAmount = 0;
+    let taxRate: number | undefined;
+    let taxBreakup: ITaxBreakupItem[] = [];
+    let taxInputs: Record<string, any> | undefined;
+    let taxRuleVersion: string | undefined;
+
+    if (groupDomain === 'none') {
+      payableAmount = req.body.amount;
+      originalAmount = req.body.amount;
+      baseAmount = req.body.amount;
+    } else {
+      const taxResult = applyTax(
+        groupDomain,
+        req.body.taxType,
+        req.body.baseAmount,
+        req.body.taxInputs,
+      );
+      baseAmount = taxResult.baseAmount;
+      taxType = req.body.taxType;
+      taxEffect = taxResult.effect;
+      taxAmount = taxResult.taxAmount;
+      taxRate = taxResult.taxRate;
+      taxBreakup = taxResult.breakup;
+      taxInputs = req.body.taxInputs ?? {};
+      taxRuleVersion = taxResult.ruleVersion;
+      payableAmount = taxResult.payable;
+      originalAmount = taxResult.payable;
+    }
+
     const debtData: Record<string, unknown> = {
       debtorId: debtor._id,
       creditorId: creditor._id,
-      amount,
-      originalAmount: amount,
+      amount: payableAmount,
+      originalAmount,
+      baseAmount,
+      taxAmount,
+      taxBreakup,
       status: 'pending',
       confirmedBy: null,
       createdBy: req.merchant?._id,
       version: 0,
     };
+    if (taxType) debtData.taxType = taxType;
+    if (taxEffect) debtData.taxEffect = taxEffect;
+    if (taxRate !== undefined) debtData.taxRate = taxRate;
+    if (taxInputs) debtData.taxInputs = taxInputs;
+    if (taxRuleVersion) debtData.taxRuleVersion = taxRuleVersion;
     if (groupId) {
       debtData.groupId = new mongoose.Types.ObjectId(groupId);
     }
-    if (dueDate) debtData.dueDate = new Date(dueDate);
-    if (note) debtData.note = note;
+    if (req.body.dueDate) debtData.dueDate = new Date(req.body.dueDate);
+    if (req.body.note) debtData.note = req.body.note;
 
     const debt = await Debt.create(debtData);
     const populated = await debt.populate([
@@ -313,20 +420,34 @@ export const createDebt = async (
       { path: 'createdBy', select: 'name email' },
     ]);
 
-    // Record audit log
+    // Record audit log with tax fields included in meta
     await audit(req, 'DEBT_CREATED', 'Debt', debt._id, {
-      amount,
-      originalAmount: amount,
+      amount: payableAmount,
+      originalAmount,
       status: 'pending',
       debtorId: debtor._id,
       creditorId: creditor._id,
+      baseAmount,
+      taxType,
+      taxEffect,
+      taxAmount,
+      taxRate,
+      taxBreakup,
+      taxInputs,
+      taxRuleVersion,
     });
 
     // Notify counterparty of debt request and emit group event
     const callerId = req.merchant!._id.toString();
     const counterpartyId = callerId === debtor._id.toString() ? creditor._id.toString() : debtor._id.toString();
     if (groupId) {
-      notify(groupId, counterpartyId, 'debt:requested', `New debt request of ₹${amount.toLocaleString()} from ${req.merchant!.name}`, { refType: 'debt', refId: debt._id.toString() }).catch(console.error);
+      notify(
+        groupId,
+        counterpartyId,
+        'debt:requested',
+        `New debt request of ₹${payableAmount.toLocaleString()} from ${req.merchant!.name}`,
+        { refType: 'debt', refId: debt._id.toString() },
+      ).catch(console.error);
       emitToGroup(groupId, 'debt:created', { debt: populated });
     }
 

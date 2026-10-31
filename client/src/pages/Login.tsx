@@ -3,12 +3,14 @@ import { useNavigate, Link } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import { authAPI } from "../api/client";
 import Logo from "../components/Logo";
+import { useAuth } from "../state/AuthProvider";
 
 /**
  * Login — Clean auth page with CreditFlow branding.
  */
 export default function Login() {
   const navigate = useNavigate();
+  const { reload } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -34,6 +36,7 @@ export default function Login() {
         if (res.data.merchant) {
           localStorage.setItem("creditflow_user", JSON.stringify(res.data.merchant));
         }
+        await reload();
         navigate("/");
       }
     } catch (err: unknown) {

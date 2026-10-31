@@ -35,7 +35,7 @@ interface AuthContextValue {
   isLoading: boolean;
   isSwitching: boolean;
   isAuthenticated: boolean;
-  reload: () => void;
+  reload: () => Promise<void>;
   logout: () => void;
   switchMerchant: (email: string) => Promise<void>;
 }
@@ -48,7 +48,7 @@ const AuthContext = createContext<AuthContextValue>({
   isLoading: false,
   isSwitching: false,
   isAuthenticated: false,
-  reload: () => {},
+  reload: async () => {},
   logout: () => {},
   switchMerchant: async () => {},
 });

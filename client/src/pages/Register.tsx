@@ -3,12 +3,14 @@ import { useNavigate, Link } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import { authAPI } from "../api/client";
 import Logo from "../components/Logo";
+import { useAuth } from "../state/AuthProvider";
 
 /**
  * Register — Clean account creation page.
  */
 export default function Register() {
   const navigate = useNavigate();
+  const { reload } = useAuth();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -44,6 +46,7 @@ export default function Register() {
         if (res.data.merchant) {
           localStorage.setItem("creditflow_user", JSON.stringify(res.data.merchant));
         }
+        await reload();
         navigate("/");
       }
     } catch (err: unknown) {

@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { Merchant } from '../models/Merchant';
-import { Membership, IGroup } from '../models/Group';
+import { Membership, IGroup, Group } from '../models/Group';
 import { AuthRequest } from '../middleware/auth.middleware';
 
 import crypto from 'crypto';
@@ -72,7 +72,26 @@ export const register = async (req: Request, res: Response, next: NextFunction):
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
-    const merchant = await Merchant.create({ name, email, passwordHash });
+    const merchant = await Merchant.create({
+      name,
+      email,
+      passwordHash,
+      riskProfile: {
+        riskScore: 0.05,
+        riskCategory: 'LOW',
+        lastUpdated: new Date(),
+      },
+    });
+
+    // Auto-join default demo group (e.g. Crawford Market) if it exists
+    const defaultGroup = await Group.findOne();
+    if (defaultGroup) {
+      await Membership.create({
+        groupId: defaultGroup._id,
+        merchantId: merchant._id,
+        role: 'member',
+      });
+    }
 
     const familyId = uuidv4();
     const accessToken = signAccessToken(merchant.id as string);

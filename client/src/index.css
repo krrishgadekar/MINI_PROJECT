@@ -1,7 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 /* =========================================================================
-   CreditFlow Design System â€” Clean, Modern & Premium
+   CreditFlow Design System — Clean, Modern & Premium
    ========================================================================= */
 
 /* ---------------------------------------------------------------------------
@@ -82,6 +82,7 @@
 
   /* Spacing */
   --sidebar-width: 260px;
+  --sidebar-width-collapsed: 72px;
   --content-padding: 28px;
   --border-radius: 10px;
   --border-radius-sm: 6px;
@@ -123,9 +124,9 @@
   --accent-gradient: linear-gradient(135deg, #0d2247 0%, #162e5b 100%);
   --accent-gradient-text: linear-gradient(135deg, #0d2247 0%, #1d4ed8 100%);
   --accent-gradient-vivid: linear-gradient(135deg, #0d2247 0%, #c8502a 100%);
-  --bg-glass: rgba(255, 255, 255, 0.94);
-  --bg-glass-hover: #ffffff;
-  --bg-glass-strong: rgba(255, 255, 255, 0.98);
+  --bg-glass: rgba(255, 253, 249, 0.94);
+  --bg-glass-hover: #fffdf9;
+  --bg-glass-strong: rgba(255, 253, 249, 0.98);
 }
 
 /* ---------------------------------------------------------------------------
@@ -202,11 +203,15 @@ a:hover {
 }
 
 .app-content {
-  flex: 1;
   margin-left: var(--sidebar-width);
+  width: calc(100% - var(--sidebar-width));
+  max-width: calc(100% - var(--sidebar-width));
+  min-width: 0;
   padding: var(--content-padding);
   min-height: 100vh;
-  transition: margin-left var(--transition-base);
+  box-sizing: border-box;
+  overflow-x: hidden;
+  transition: margin-left var(--transition-base), width var(--transition-base), max-width var(--transition-base);
 }
 
 /* ---------------------------------------------------------------------------
@@ -251,7 +256,7 @@ a:hover {
   left: 0;
   width: var(--sidebar-width);
   height: 100vh;
-  background: #ffffff;
+  background: #fdfbf7;
   border-right: 1px solid var(--border-primary);
   display: flex;
   flex-direction: column;
@@ -265,7 +270,7 @@ a:hover {
   display: flex;
   align-items: center;
   gap: 12px;
-  background: #ffffff;
+  background: #fdfbf7;
 }
 
 .sidebar-brand-icon {
@@ -561,7 +566,7 @@ a:hover {
   overflow-x: auto;
   border: 1px solid var(--border-primary);
   border-radius: var(--border-radius);
-  background: #ffffff;
+  background: var(--bg-elevated);
 }
 
 .data-table {
@@ -654,7 +659,7 @@ a:hover {
 }
 
 .btn-secondary {
-  background: #ffffff;
+  background: var(--bg-elevated);
   color: var(--text-primary);
   border-color: var(--border-primary);
 }
@@ -705,7 +710,7 @@ a:hover {
 textarea {
   width: 100%;
   padding: 10px 14px;
-  background: #ffffff;
+  background: var(--bg-elevated);
   border: 1px solid var(--border-primary);
   border-radius: var(--border-radius-sm);
   color: var(--text-primary);
@@ -810,7 +815,7 @@ textarea::placeholder {
 }
 
 .ui-modal-container {
-  background: #ffffff;
+  background: var(--bg-elevated);
   border: 1px solid var(--border-primary);
   border-radius: var(--border-radius-lg);
   box-shadow: var(--shadow-lg);
@@ -866,7 +871,7 @@ textarea::placeholder {
   max-width: 420px;
   padding: 14px 18px;
   border-radius: var(--border-radius-sm);
-  background: #ffffff;
+  background: var(--bg-elevated);
   border: 1px solid var(--border-primary);
   box-shadow: var(--shadow-lg);
   display: flex;
@@ -890,7 +895,7 @@ textarea::placeholder {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  background: #ffffff;
+  background: var(--bg-elevated);
   border-bottom: 1px solid var(--border-primary);
   position: sticky;
   top: 0;
@@ -999,7 +1004,7 @@ textarea::placeholder {
 .auth-card {
   width: 100%;
   max-width: 440px;
-  background: #ffffff;
+  background: var(--bg-elevated);
   border: 1px solid var(--border-primary);
   border-radius: var(--border-radius-lg);
   padding: 40px 36px;
@@ -1136,7 +1141,7 @@ textarea::placeholder {
   justify-content: center;
   padding: 48px 24px;
   text-align: center;
-  background: #ffffff;
+  background: var(--bg-elevated);
   border: 2px dashed var(--border-primary);
   border-radius: var(--border-radius);
 }
@@ -1205,5 +1210,107 @@ textarea::placeholder {
   .demo-presentation-bar > div {
     justify-content: space-between;
     width: 100%;
+  }
+}
+
+
+/* ---------------------------------------------------------------------------
+   Collapsed Sidebar (YouTube-style mini sidebar)
+   --------------------------------------------------------------------------- */
+.sidebar.collapsed {
+  width: var(--sidebar-width-collapsed);
+}
+
+.sidebar.collapsed .sidebar-brand {
+  padding: 16px 0;
+  justify-content: center;
+  gap: 0;
+}
+
+.sidebar.collapsed .sidebar-nav {
+  padding: 8px 6px;
+  align-items: center;
+}
+
+.sidebar.collapsed .sidebar-footer {
+  padding: 10px 6px;
+  justify-content: center;
+}
+
+.sidebar.collapsed .sidebar-avatar {
+  width: 32px;
+  height: 32px;
+  font-size: 0.68rem;
+}
+
+/* Collapse toggle button */
+.sidebar-collapse-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: var(--border-radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.sidebar-collapse-btn:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+/* YouTube-style icon-only nav link */
+.sidebar-link-icon-only {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px !important;
+  padding: 10px 4px !important;
+  border-radius: var(--border-radius-sm);
+  position: relative;
+  min-height: 52px;
+  width: 100%;
+}
+
+.sidebar-link-icon-only .sidebar-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.sidebar-icon-label {
+  font-size: 0.62rem;
+  font-weight: 500;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 56px;
+  display: block;
+}
+
+.sidebar-link-icon-only.active::before {
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+}
+
+/* Content area shifts when sidebar is collapsed */
+.sidebar-is-collapsed .app-content {
+  margin-left: var(--sidebar-width-collapsed);
+  width: calc(100% - var(--sidebar-width-collapsed));
+  max-width: calc(100% - var(--sidebar-width-collapsed));
+}
+
+/* Hide the mobile close button on desktop */
+@media (min-width: 769px) {
+  .mobile-close-btn {
+    display: none !important;
   }
 }

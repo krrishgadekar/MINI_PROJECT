@@ -154,7 +154,7 @@ export default function Network() {
           <button
             onClick={() => navigate('/risk')}
             style={{
-              background: '#ffffff',
+              background: 'var(--bg-elevated)',
               color: '#0d2247',
               border: '1px solid #dcd5cb',
               padding: '8px 14px',
@@ -189,7 +189,7 @@ export default function Network() {
             }}
           >
             <div style={{ width: 8, height: 8, background: '#c8502a', borderRadius: 1 }} />
-            <span>SETTLEMENT ENGINE</span>
+            <span>Run Settlement</span>
           </button>
         </div>
       </div>
@@ -253,7 +253,7 @@ export default function Network() {
             <button
               onClick={clearContagion}
               style={{
-                background: '#ffffff',
+                background: 'var(--bg-elevated)',
                 border: '1px solid #dcd5cb',
                 color: '#0d2247',
                 padding: '4px 10px',
@@ -313,41 +313,43 @@ export default function Network() {
       </div>
 
       {/* Summary KPI Cards — Architectural Specification Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 16 }}>
         <div
           className="stat-card"
           style={{
-            background: '#ffffff',
+            background: 'var(--bg-elevated)',
             border: '1px solid #dcd5cb',
-            borderRadius: 4,
-            padding: '16px 20px',
+            borderRadius: 8,
+            padding: '16px 18px',
+            overflow: 'hidden',
           }}
         >
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 700, marginBottom: 4 }}>
-            ① TOTAL OBLIGATION VOLUME
+            Total Debt Volume
           </div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.75rem', fontWeight: 700, color: '#0d2247' }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.35rem', fontWeight: 700, color: '#0d2247' }}>
             ₹{totalDebtVolume.toLocaleString('en-IN')}
           </div>
           <div style={{ fontSize: '0.75rem', color: '#1e6b4b', marginTop: 4, fontFamily: 'var(--font-mono)' }}>
-            Across {debts.length} active directed credit edges
+            Across {debts.length} active debts
           </div>
         </div>
 
         <div
           className="stat-card"
           style={{
-            background: '#ffffff',
+            background: 'var(--bg-elevated)',
             border: '1px solid #dcd5cb',
-            borderRadius: 4,
-            padding: '16px 20px',
+            borderRadius: 8,
+            padding: '16px 18px',
+            overflow: 'hidden',
           }}
         >
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 700, marginBottom: 4 }}>
-            ② NETWORK VERTICES &amp; DENSITY
+            Network Size
           </div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.75rem', fontWeight: 700, color: '#0d2247' }}>
-            {merchants.length} MERCHANTS
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.35rem', fontWeight: 700, color: '#0d2247' }}>
+            {merchants.length} Merchants
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4, fontFamily: 'var(--font-mono)' }}>
             {debts.length > 0 ? (debts.length / Math.max(1, merchants.length * (merchants.length - 1))).toFixed(3) : '0.000'} graph density
@@ -357,27 +359,31 @@ export default function Network() {
         <div
           className="stat-card"
           style={{
-            background: '#ffffff',
+            background: 'var(--bg-elevated)',
             border: '1px solid #dcd5cb',
-            borderRadius: 4,
-            padding: '16px 20px',
+            borderRadius: 8,
+            padding: '16px 18px',
+            overflow: 'hidden',
           }}
         >
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 700, marginBottom: 4 }}>
-            ③ CASCADE VULNERABILITY STATUS
+            Network Status
           </div>
           <div
             style={{
               fontFamily: 'var(--font-mono)',
-              fontSize: '1.75rem',
+              fontSize: '1.25rem',
               fontWeight: 700,
               color: contagionSource ? '#c8502a' : '#1e6b4b',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
             }}
           >
-            {contagionSource ? 'CASCADE ACTIVE' : 'SECURE / NORMAL'}
+            {contagionSource ? 'CASCADE ACTIVE' : 'SECURE'}
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
-            {contagionSource ? `Traced from ${contagionSource.replace(/_/g, ' ')}` : 'Click any node to run BFS traversal'}
+            {contagionSource ? `Traced from ${contagionSource.replace(/_/g, ' ')}` : 'Click a node to simulate'}
           </div>
         </div>
       </div>

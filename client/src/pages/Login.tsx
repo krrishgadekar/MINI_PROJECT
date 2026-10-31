@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { authAPI } from "../api/client";
+import Logo from "../components/Logo";
 
 /**
- * Login — Beautiful auth page with animated gradient orbs.
+ * Login — Clean auth page with CreditFlow branding.
  */
 export default function Login() {
   const navigate = useNavigate();
@@ -43,29 +44,15 @@ export default function Login() {
     }
   };
 
-
   return (
     <div className="auth-page">
-      {/* Extra floating orb */}
-      <div style={{
-        position: 'absolute',
-        top: '50%',
-        left: '60%',
-        width: 300,
-        height: 300,
-        background: 'radial-gradient(circle, rgba(6, 182, 212, 0.08) 0%, transparent 70%)',
-        borderRadius: '50%',
-        animation: 'floatOrb2 20s ease-in-out infinite reverse',
-        zIndex: 0,
-      }} />
-
       <div className="auth-card">
         <div className="auth-brand">
           <div className="auth-brand-icon">
-            <Sparkles size={24} />
+            <Logo size={52} />
           </div>
           <h1>CreditFlow</h1>
-          <p>Smart debt settlement for merchant networks</p>
+          <p>Simple debt settlement for merchant groups</p>
         </div>
 
         <form onSubmit={handleSubmit}>
@@ -100,13 +87,13 @@ export default function Login() {
 
           {error && (
             <div style={{
-              color: "var(--risk-critical)",
+              color: "var(--color-critical)",
               fontSize: "var(--font-size-sm)",
               marginBottom: 14,
               padding: '10px 14px',
-              background: 'var(--risk-critical-bg)',
+              background: 'var(--color-critical-bg)',
               borderRadius: 'var(--border-radius-sm)',
-              border: '1px solid rgba(248, 113, 113, 0.2)',
+              border: '1px solid rgba(184, 58, 44, 0.15)',
             }}>
               {error}
             </div>
@@ -122,7 +109,7 @@ export default function Login() {
               "Signing in..."
             ) : (
               <>
-                Get Started <ArrowRight size={18} />
+                Sign In <ArrowRight size={18} />
               </>
             )}
           </button>

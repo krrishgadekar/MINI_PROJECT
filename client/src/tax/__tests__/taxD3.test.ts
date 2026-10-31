@@ -310,11 +310,12 @@ test('Overview Summary Card: renders Base, Tax, Payable totals and hides in none
   assertIncludes(overviewHtml, 'Payable: ₹23,600', 'Payable total rendered');
 
   // Verify hidden in none domain
+  const isNoneGroupActive = (summary.domain as string) === 'none';
   const noneGroupHtml = renderToStaticMarkup(
     React.createElement(
       'div',
       null,
-      false /* isTaxGroup = false */
+      isNoneGroupActive
         ? React.createElement('div', { 'data-testid': 'tax-summary-card' })
         : null
     )

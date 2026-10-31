@@ -31,7 +31,10 @@ const CreateDebtSchema = z.object({
 });
 
 const UpdateDebtSchema = z.object({
-  amount: z.number().positive(),
+  amount: z.number().positive().optional(),
+  baseAmount: z.number().positive().optional(),
+  taxType: z.string().optional(),
+  taxInputs: z.record(z.any()).optional(),
   expectedVersion: z.number().optional(),
 });
 
@@ -445,7 +448,7 @@ export const createDebt = async (
         groupId,
         counterpartyId,
         'debt:requested',
-        `New debt request of ₹${payableAmount.toLocaleString()} from ${req.merchant!.name}`,
+        `New debt request of ₹${payableAmount.toLocaleString()}${taxType ? ` [${taxType}]` : ''} from ${req.merchant!.name}`,
         { refType: 'debt', refId: debt._id.toString() },
       ).catch(console.error);
       emitToGroup(groupId, 'debt:created', { debt: populated });
@@ -537,7 +540,7 @@ export const confirmDebt = async (
     const groupId = req.groupId;
     const counterpartyId = callerId === debt.debtorId.toString() ? debt.creditorId.toString() : debt.debtorId.toString();
     if (groupId) {
-      notify(groupId, counterpartyId, 'debt:confirmed', `Debt obligation of ₹${debt.amount.toLocaleString()} was confirmed.`, { refType: 'debt', refId: debt._id.toString() }).catch(console.error);
+      notify(groupId, counterpartyId, 'debt:confirmed', `Debt obligation of ₹${debt.amount.toLocaleString()}${debt.taxType ? ` [${debt.taxType}]` : ''} was confirmed.`, { refType: 'debt', refId: debt._id.toString() }).catch(console.error);
       emitToGroup(groupId, 'debt:updated', { debt: updated });
     }
 
@@ -887,7 +890,7 @@ export const updateDebt = async (
   try {
     const parsed = UpdateDebtSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ message: 'Validation error', errors: parsed.error.flatten() });
+      res.status(400).json({ success: false, code: 'VALIDATION', message: 'Validation error', errors: parsed.error.flatten() });
       return;
     }
 
@@ -917,7 +920,105 @@ export const updateDebt = async (
     }
 
     if (debt.status !== 'active' && debt.status !== 'pending') {
-      res.status(400).json({ message: 'Cannot update a settled or netted debt.' });
+      res.status(400).json({ success: false, code: 'VALIDATION', message: 'Cannot update a settled or netted debt.' });
+      return;
+    }
+
+    // Fetch group domain
+    const groupDomain = (req.group?.domain || 'none') as TaxDomain;
+
+    if (groupDomain !== 'none') {
+      // Tax group: block if any payment has been recorded (409)
+      const paymentExists = await Payment.exists({ debtId: debt._id });
+      if (paymentExists) {
+        res.status(409).json({
+          success: false,
+          code: 'VALIDATION',
+          message: 'Cannot update tax debt that already has payments recorded.',
+        });
+        return;
+      }
+
+      // baseAmount is required for tax groups
+      if (!parsed.data.baseAmount) {
+        res.status(400).json({
+          success: false,
+          code: 'VALIDATION',
+          message: 'baseAmount is required when updating a tax debt.',
+        });
+        return;
+      }
+
+      const taxTypeToUse = parsed.data.taxType ?? debt.taxType;
+      if (!taxTypeToUse) {
+        res.status(400).json({
+          success: false,
+          code: 'VALIDATION',
+          message: 'taxType is required for tax debt update (either supply in body or it must exist on the debt).',
+        });
+        return;
+      }
+
+      const taxInputsToUse = parsed.data.taxInputs ?? (debt.taxInputs as Record<string, any> | undefined);
+      const taxResult = applyTax(groupDomain, taxTypeToUse, parsed.data.baseAmount, taxInputsToUse);
+
+      const ifMatch = req.headers['if-match'];
+      const expectedVersion =
+        parsed.data.expectedVersion ??
+        (ifMatch !== undefined ? parseInt(ifMatch as string, 10) : debt.version);
+
+      const before = {
+        amount: debt.amount,
+        baseAmount: debt.baseAmount,
+        taxType: debt.taxType,
+        taxEffect: debt.taxEffect,
+        taxAmount: debt.taxAmount,
+        taxRate: debt.taxRate,
+        taxBreakup: debt.taxBreakup,
+        taxInputs: debt.taxInputs,
+        taxRuleVersion: debt.taxRuleVersion,
+      };
+
+      await casUpdate(Debt, debt._id, expectedVersion, {
+        amount: taxResult.payable,
+        baseAmount: taxResult.baseAmount,
+        taxType: taxTypeToUse,
+        taxEffect: taxResult.effect,
+        taxAmount: taxResult.taxAmount,
+        taxRate: taxResult.taxRate,
+        taxBreakup: taxResult.breakup,
+        taxInputs: taxInputsToUse ?? {},
+        taxRuleVersion: taxResult.ruleVersion,
+      });
+
+      const populated = await Debt.findById(debt._id).populate([
+        { path: 'debtorId', select: 'name email' },
+        { path: 'creditorId', select: 'name email' },
+      ]);
+
+      await audit(req, 'DEBT_UPDATED', 'Debt', debt._id, {
+        before,
+        after: {
+          amount: taxResult.payable,
+          baseAmount: taxResult.baseAmount,
+          taxType: taxTypeToUse,
+          taxEffect: taxResult.effect,
+          taxAmount: taxResult.taxAmount,
+          taxRate: taxResult.taxRate,
+        },
+      });
+
+      const groupId = req.groupId;
+      if (groupId) {
+        emitToGroup(groupId, 'debt:updated', { debt: populated });
+      }
+      res.json({ success: true, debt: populated });
+      return;
+    }
+
+    // 'none' group: legacy behavior
+    if (!parsed.data.amount) {
+      res.status(400).json({ success: false, code: 'VALIDATION', message: 'amount is required for updating a non-tax debt.' });
       return;
     }
 
@@ -1023,7 +1124,9 @@ export const settleDebt = async (
 const DebtImportRowSchema = z.object({
   debtor: z.string().min(1, 'Debtor is required'),
   creditor: z.string().min(1, 'Creditor is required'),
-  amount: z.preprocess((val) => Number(val), z.number().positive('Amount must be positive')),
+  amount: z.preprocess((val) => (val !== undefined && val !== '' ? Number(val) : undefined), z.number().positive('Amount must be positive').optional()),
+  baseAmount: z.preprocess((val) => (val !== undefined && val !== '' ? Number(val) : undefined), z.number().positive('baseAmount must be positive').optional()),
+  taxType: z.string().optional(),
   dueDate: z.string().optional(),
   note: z.string().optional(),
 });
@@ -1121,7 +1224,14 @@ export const exportDebtsCsv = async (
       return str;
     };
 
-    res.write('id,debtorId,debtorName,debtorEmail,creditorId,creditorName,creditorEmail,amount,remainingAmount,status,dueDate,note,createdAt\n');
+    const groupDomain = (req.group?.domain || 'none') as TaxDomain;
+    const isTaxGroup = groupDomain !== 'none';
+
+    if (isTaxGroup) {
+      res.write('id,debtorId,debtorName,debtorEmail,creditorId,creditorName,creditorEmail,amount,remainingAmount,baseAmount,taxType,taxAmount,status,dueDate,note,createdAt\n');
+    } else {
+      res.write('id,debtorId,debtorName,debtorEmail,creditorId,creditorName,creditorEmail,amount,remainingAmount,status,dueDate,note,createdAt\n');
+    }
 
     const cursor = Debt.find(filter)
       .populate('debtorId', 'name email')
@@ -1135,21 +1245,43 @@ export const exportDebtsCsv = async (
       const debtorIdStr = debtor?._id ? debtor._id.toString() : (doc.debtorId?.toString() || '');
       const creditorIdStr = creditor?._id ? creditor._id.toString() : (doc.creditorId?.toString() || '');
 
-      const row = [
-        doc._id.toString(),
-        debtorIdStr,
-        escapeCsv(debtor?.name || ''),
-        escapeCsv(debtor?.email || ''),
-        creditorIdStr,
-        escapeCsv(creditor?.name || ''),
-        escapeCsv(creditor?.email || ''),
-        doc.originalAmount ?? doc.amount,
-        doc.amount,
-        doc.status,
-        doc.dueDate ? doc.dueDate.toISOString() : '',
-        escapeCsv(doc.note || ''),
-        doc.createdAt ? doc.createdAt.toISOString() : '',
-      ].join(',');
+      let row: string;
+      if (isTaxGroup) {
+        row = [
+          doc._id.toString(),
+          debtorIdStr,
+          escapeCsv(debtor?.name || ''),
+          escapeCsv(debtor?.email || ''),
+          creditorIdStr,
+          escapeCsv(creditor?.name || ''),
+          escapeCsv(creditor?.email || ''),
+          doc.originalAmount ?? doc.amount,
+          doc.amount,
+          doc.baseAmount ?? doc.amount,
+          escapeCsv(doc.taxType || ''),
+          doc.taxAmount ?? 0,
+          doc.status,
+          doc.dueDate ? doc.dueDate.toISOString() : '',
+          escapeCsv(doc.note || ''),
+          doc.createdAt ? doc.createdAt.toISOString() : '',
+        ].join(',');
+      } else {
+        row = [
+          doc._id.toString(),
+          debtorIdStr,
+          escapeCsv(debtor?.name || ''),
+          escapeCsv(debtor?.email || ''),
+          creditorIdStr,
+          escapeCsv(creditor?.name || ''),
+          escapeCsv(creditor?.email || ''),
+          doc.originalAmount ?? doc.amount,
+          doc.amount,
+          doc.status,
+          doc.dueDate ? doc.dueDate.toISOString() : '',
+          escapeCsv(doc.note || ''),
+          doc.createdAt ? doc.createdAt.toISOString() : '',
+        ].join(',');
+      }
 
       res.write(row + '\n');
     }
@@ -1213,6 +1345,8 @@ export const importDebtsCsv = async (
     }
 
     const { rows } = parseCsv(csvContent);
+    const importGroup = await Group.findById(groupId);
+    const importGroupDomain = (importGroup?.domain || 'none') as TaxDomain;
     if (rows.length === 0) {
       res.status(400).json({ success: false, message: 'CSV contains no data rows.' });
       return;
@@ -1253,6 +1387,14 @@ export const importDebtsCsv = async (
       debtorId: mongoose.Types.ObjectId;
       creditorId: mongoose.Types.ObjectId;
       amount: number;
+      baseAmount?: number;
+      taxType?: string;
+      taxEffect?: 'add' | 'deduct';
+      taxAmount?: number;
+      taxRate?: number;
+      taxBreakup?: ITaxBreakupItem[];
+      taxInputs?: Record<string, any>;
+      taxRuleVersion?: string;
       dueDate?: Date;
       note?: string;
       debtorIdentifier: string;
@@ -1272,20 +1414,26 @@ export const importDebtsCsv = async (
 
       const debtorKey = Object.keys(rawRow).find((k) => /^debtor/i.test(k));
       const creditorKey = Object.keys(rawRow).find((k) => /^creditor/i.test(k));
-      const amountKey = Object.keys(rawRow).find((k) => /^amount/i.test(k));
+      const amountKey = Object.keys(rawRow).find((k) => /^amount$/i.test(k));
+      const baseAmountKey = Object.keys(rawRow).find((k) => /^baseAmount$/i.test(k));
+      const taxTypeKey = Object.keys(rawRow).find((k) => /^taxType$/i.test(k));
       const dueDateKey = Object.keys(rawRow).find((k) => /^due/i.test(k));
       const noteKey = Object.keys(rawRow).find((k) => /^note|description/i.test(k));
 
       const debtorVal = debtorKey ? rawRow[debtorKey] : '';
       const creditorVal = creditorKey ? rawRow[creditorKey] : '';
       const amountVal = amountKey ? rawRow[amountKey] : '';
+      const baseAmountVal = baseAmountKey ? rawRow[baseAmountKey] : '';
+      const taxTypeVal = taxTypeKey ? rawRow[taxTypeKey] : '';
       const dueDateVal = dueDateKey ? rawRow[dueDateKey] : '';
       const noteVal = noteKey ? rawRow[noteKey] : '';
 
       const parseResult = DebtImportRowSchema.safeParse({
         debtor: debtorVal,
         creditor: creditorVal,
-        amount: amountVal,
+        amount: amountVal || undefined,
+        baseAmount: baseAmountVal || undefined,
+        taxType: taxTypeVal || undefined,
         dueDate: dueDateVal || undefined,
         note: noteVal || undefined,
       });
@@ -1294,7 +1442,7 @@ export const importDebtsCsv = async (
         const issues = parseResult.error.issues.map((iss) => `${iss.path.join('.')}: ${iss.message}`);
         rowErrors.push(...issues);
       } else {
-        const { debtor, creditor, amount, dueDate, note } = parseResult.data;
+        const { debtor, creditor, amount, baseAmount, taxType, dueDate, note } = parseResult.data;
 
         const resolvedDebtorId = memberById.get(debtor) || memberByEmail.get(debtor.toLowerCase());
         if (!resolvedDebtorId) {
@@ -1322,15 +1470,53 @@ export const importDebtsCsv = async (
 
         if (rowErrors.length === 0 && resolvedDebtorId && resolvedCreditorId) {
           const sanitizedNote = note ? (/^[=+@\-\t\r]/.test(note) ? `'${note}` : note) : '';
-          validRows.push({
-            debtorId: resolvedDebtorId,
-            creditorId: resolvedCreditorId,
-            amount,
-            dueDate: parsedDueDate,
-            note: sanitizedNote,
-            debtorIdentifier: debtor,
-            creditorIdentifier: creditor,
-          });
+
+          if (importGroupDomain !== 'none') {
+            if (!taxType) {
+              rowErrors.push('taxType is required for tax group import.');
+            }
+            if (!baseAmount) {
+              rowErrors.push('baseAmount is required for tax group import.');
+            }
+            if (taxType && baseAmount) {
+              try {
+                const taxResult = applyTax(importGroupDomain, taxType, baseAmount, undefined);
+                validRows.push({
+                  debtorId: resolvedDebtorId,
+                  creditorId: resolvedCreditorId,
+                  amount: taxResult.payable,
+                  baseAmount: taxResult.baseAmount,
+                  taxType,
+                  taxEffect: taxResult.effect,
+                  taxAmount: taxResult.taxAmount,
+                  taxRate: taxResult.taxRate,
+                  taxBreakup: taxResult.breakup,
+                  taxRuleVersion: taxResult.ruleVersion,
+                  dueDate: parsedDueDate,
+                  note: sanitizedNote,
+                  debtorIdentifier: debtor,
+                  creditorIdentifier: creditor,
+                });
+              } catch (taxErr: any) {
+                rowErrors.push(`Tax computation error: ${taxErr.message}`);
+              }
+            }
+          } else {
+            if (amount === undefined) {
+              rowErrors.push('amount is required for non-tax group import.');
+            } else {
+              validRows.push({
+                debtorId: resolvedDebtorId,
+                creditorId: resolvedCreditorId,
+                amount,
+                baseAmount: amount,
+                dueDate: parsedDueDate,
+                note: sanitizedNote,
+                debtorIdentifier: debtor,
+                creditorIdentifier: creditor,
+              });
+            }
+          }
         }
       }
 
@@ -1377,6 +1563,13 @@ export const importDebtsCsv = async (
         creditorId: item.creditorId,
         amount: item.amount,
         originalAmount: item.amount,
+        baseAmount: item.baseAmount ?? item.amount,
+        taxAmount: item.taxAmount ?? 0,
+        taxBreakup: item.taxBreakup ?? [],
+        ...(item.taxType ? { taxType: item.taxType } : {}),
+        ...(item.taxEffect ? { taxEffect: item.taxEffect } : {}),
+        ...(item.taxRate !== undefined ? { taxRate: item.taxRate } : {}),
+        ...(item.taxRuleVersion ? { taxRuleVersion: item.taxRuleVersion } : {}),
         dueDate: item.dueDate,
         note: item.note,
         status: 'active',

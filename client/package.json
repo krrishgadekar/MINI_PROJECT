@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test": "node --experimental-strip-types src/tax/__tests__/rulesMock.test.ts && node --experimental-strip-types src/tax/__tests__/taxComponents.test.ts"
+    "test": "node --experimental-strip-types src/tax/__tests__/rulesMock.test.ts && node --experimental-strip-types src/tax/__tests__/taxComponents.test.ts && node --experimental-strip-types src/tax/__tests__/taxD3.test.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.3",
@@ -28,8 +28,7 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.4",
-    "oxlint": "^1.75.0",
-    "typescript": "~6.0.2",
-    "vite": "^8.2.0"
+    "typescript": "~5.9.3",
+    "vite": "^8.2.1"
   }
 }

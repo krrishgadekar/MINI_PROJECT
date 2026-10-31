@@ -15,6 +15,13 @@ export interface DebtEdge {
   debtor: string;
   creditor: string;
   amount: number;
+  debtId?: string;
+  baseAmount?: number;
+  taxType?: string;
+  taxEffect?: 'add' | 'deduct';
+  taxAmount?: number;
+  taxRate?: number;
+  taxBreakup?: Array<{ label: string; rate?: number; amount: number }>;
 }
 
 export interface MonthRecord {
@@ -132,6 +139,13 @@ export interface GraphLink {
   amount: number;
   color?: string;
   highlighted?: boolean;
+  debtId?: string;
+  baseAmount?: number;
+  taxType?: string;
+  taxEffect?: 'add' | 'deduct';
+  taxAmount?: number;
+  taxRate?: number;
+  taxBreakup?: Array<{ label: string; rate?: number; amount: number }>;
 }
 
 export interface GraphData {

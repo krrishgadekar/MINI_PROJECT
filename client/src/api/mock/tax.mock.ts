@@ -1,17 +1,19 @@
 /**
- * api/mock/tax.mock.ts — Mock Implementation for Tax Domain (§2.2)
+ * api/mock/tax.mock.ts — Mock Implementation for Tax Domain (§2.2, D3 §5)
  *
  * Implements:
  *   - getDomains(): returns the 5 domains
  *   - getRules(domain): returns rules for given domain
  *   - preview(data): calls computeTax
  *   - setGroupDomain(groupId, domain): locks domain on groups with debts or already set
+ *   - summary(): returns tax summary using taxSummaryMock
  */
 
 import type {
   TaxDomain,
   TaxRulesResponse,
   TaxPreview,
+  TaxSummary,
 } from '../../types';
 import type {
   TaxDomainItem,
@@ -25,6 +27,7 @@ import {
 } from '../../tax/rulesMock.ts';
 import { mockGroups } from './groups.mock.ts';
 import { mockDebts } from './debts.mock.ts';
+import { getTaxSummaryMock } from './taxSummary.mock.ts';
 
 export const taxMock = {
   getDomains: async (): Promise<TaxDomainItem[]> => {
@@ -67,5 +70,9 @@ export const taxMock = {
       success: true,
       group: { ...group },
     };
+  },
+
+  summary: async (): Promise<TaxSummary> => {
+    return getTaxSummaryMock();
   },
 };

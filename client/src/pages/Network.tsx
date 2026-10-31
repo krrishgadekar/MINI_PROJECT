@@ -3,34 +3,58 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useDebts } from '../hooks/useDebts';
 import { useGroupRisk } from '../hooks/useRisk';
 import { useSimulateContagion } from '../hooks/useRisk';
+import { useGroup } from '../state/GroupProvider';
 import GraphVisualizer from '../components/GraphVisualizer';
 import { Skeleton } from '../components/ui';
 import type { DebtEdge, RiskScoreResponse } from '../types';
 import {
   Share2, AlertTriangle, ShieldAlert,
-  Zap, X,
+  Zap, X, Filter,
 } from 'lucide-react';
 
 export default function Network() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { activeGroup } = useGroup();
+  const isTaxGroup = Boolean(activeGroup?.domain && activeGroup.domain !== 'none');
+
   const contagionSource = searchParams.get('contagion') || undefined;
 
   const { data: debtsData, isLoading: debtsLoading } = useDebts({ status: 'active' });
   const { data: riskData, isLoading: riskLoading } = useGroupRisk();
+
+  // Multi-select Tax Type Filter (§2.2 D3-P)
+  const [selectedTaxTypes, setSelectedTaxTypes] = useState<string[]>([]);
 
   // Stored contagion simulation results for loss-shading the graph
   const [contagionLossMap, setContagionLossMap] = useState<Record<string, number>>({});
   const [totalLoss, setTotalLoss] = useState<number>(0);
   const contagionMutation = useSimulateContagion();
 
-  // Format active debts as DebtEdges
+  // Unique tax types available in current debts
+  const availableTaxTypes = useMemo(() => {
+    if (!isTaxGroup) return [];
+    const set = new Set<string>();
+    (debtsData?.debts || []).forEach((d: any) => {
+      if (d.taxType) set.add(d.taxType);
+    });
+    return Array.from(set);
+  }, [debtsData, isTaxGroup]);
+
+  // Format active debts as DebtEdges with tax attributes
   const { debts, merchants, riskProfiles } = useMemo(() => {
     const rawDebts = debtsData?.debts || [];
     const formattedDebts: DebtEdge[] = rawDebts.map((d: any) => ({
       debtor: d.debtorId?.name || d.debtorId,
       creditor: d.creditorId?.name || d.creditorId,
       amount: d.amount,
+      debtId: d._id,
+      baseAmount: d.baseAmount ?? d.amount,
+      taxType: d.taxType,
+      taxEffect: d.taxEffect,
+      taxAmount: d.taxAmount ?? 0,
+      taxRate: d.taxRate,
+      taxBreakup: d.taxBreakup || [],
     }));
 
     const merchantSet = new Set<string>();
@@ -68,6 +92,12 @@ export default function Network() {
     };
   }, [debtsData, riskData]);
 
+  // Debts filtered by selected tax types
+  const visibleDebts = useMemo(() => {
+    if (!isTaxGroup || selectedTaxTypes.length === 0) return debts;
+    return debts.filter((d) => d.taxType && selectedTaxTypes.includes(d.taxType));
+  }, [debts, isTaxGroup, selectedTaxTypes]);
+
   // When contagionSource is in the URL and we don't have loss data yet, run simulation
   useMemo(() => {
     if (contagionSource && merchants.length > 0 && Object.keys(contagionLossMap).length === 0) {
@@ -86,8 +116,8 @@ export default function Network() {
   }, [contagionSource, merchants.length]);
 
   const totalDebtVolume = useMemo(() => {
-    return debts.reduce((sum, d) => sum + d.amount, 0);
-  }, [debts]);
+    return visibleDebts.reduce((sum, d) => sum + d.amount, 0);
+  }, [visibleDebts]);
 
   const clearContagion = () => {
     const nextParams = new URLSearchParams(searchParams);
@@ -142,7 +172,7 @@ export default function Network() {
                 fontWeight: 700,
               }}
             >
-              {merchants.length} Merchants · {debts.length} Debts
+              {merchants.length} Merchants · {visibleDebts.length} Debts
             </span>
           </div>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: 4 }}>
@@ -150,7 +180,7 @@ export default function Network() {
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <button
             onClick={() => navigate('/risk')}
             style={{
@@ -193,6 +223,92 @@ export default function Network() {
           </button>
         </div>
       </div>
+
+      {/* Tax Type Multi-Select Filter (§2.2 D3-P) - only shown in tax groups */}
+      {isTaxGroup && availableTaxTypes.length > 0 && (
+        <div
+          data-testid="tax-type-filter-bar"
+          style={{
+            marginBottom: 14,
+            padding: '8px 14px',
+            background: 'var(--bg-elevated)',
+            border: '1px solid #dcd5cb',
+            borderRadius: 4,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            flexWrap: 'wrap',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#0d2247' }}>
+            <Filter size={13} color="#c8502a" />
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+              }}
+            >
+              Tax Type:
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            {availableTaxTypes.map((type) => {
+              const isSelected = selectedTaxTypes.includes(type);
+              return (
+                <button
+                  key={type}
+                  type="button"
+                  data-testid={`filter-tax-type-${type}`}
+                  onClick={() => {
+                    if (isSelected) {
+                      setSelectedTaxTypes(selectedTaxTypes.filter((t) => t !== type));
+                    } else {
+                      setSelectedTaxTypes([...selectedTaxTypes, type]);
+                    }
+                  }}
+                  style={{
+                    background: isSelected ? '#0d2247' : '#ffffff',
+                    color: isSelected ? '#ffffff' : '#0d2247',
+                    border: `1px solid ${isSelected ? '#0d2247' : '#dcd5cb'}`,
+                    borderRadius: 3,
+                    padding: '3px 9px',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.7rem',
+                    fontWeight: isSelected ? 700 : 500,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {type}
+                </button>
+              );
+            })}
+
+            {selectedTaxTypes.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelectedTaxTypes([])}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#c8502a',
+                  fontSize: '0.68rem',
+                  fontFamily: 'var(--font-mono)',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  padding: '2px 4px',
+                }}
+              >
+                Clear filter ({selectedTaxTypes.length})
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Contagion Simulation Alert Banner */}
       {contagionSource && (
@@ -303,10 +419,11 @@ export default function Network() {
         ) : (
           <GraphVisualizer
             merchants={merchants}
-            debts={debts}
+            debts={visibleDebts}
             riskProfiles={riskProfiles}
             contagionSource={contagionSource}
             contagionLossMap={contagionLossMap}
+            isTaxGroup={isTaxGroup}
             height={520}
           />
         )}
@@ -331,7 +448,7 @@ export default function Network() {
             ₹{totalDebtVolume.toLocaleString('en-IN')}
           </div>
           <div style={{ fontSize: '0.75rem', color: '#1e6b4b', marginTop: 4, fontFamily: 'var(--font-mono)' }}>
-            Across {debts.length} active debts
+            Across {visibleDebts.length} active debts
           </div>
         </div>
 
@@ -352,7 +469,7 @@ export default function Network() {
             {merchants.length} Merchants
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4, fontFamily: 'var(--font-mono)' }}>
-            {debts.length > 0 ? (debts.length / Math.max(1, merchants.length * (merchants.length - 1))).toFixed(3) : '0.000'} graph density
+            {visibleDebts.length > 0 ? (visibleDebts.length / Math.max(1, merchants.length * (merchants.length - 1))).toFixed(3) : '0.000'} graph density
           </div>
         </div>
 

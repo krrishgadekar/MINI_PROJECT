@@ -4,6 +4,7 @@ import { useGroup } from '../state/GroupProvider';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, queryKeys } from '../api';
 import { useToast } from './ui/Toast';
+import Logo from './Logo';
 import {
   Users,
   CheckCircle2,
@@ -228,24 +229,7 @@ export default function DemoPresentationBar() {
               borderRight: '1px solid #e8e2d8',
             }}
           >
-            <div
-              style={{
-                width: 24,
-                height: 24,
-                border: '1px solid #0d2247',
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                padding: 2,
-                gap: 2,
-                background: '#f4f0eb',
-              }}
-              title="CreditFlow Architectural Engine"
-            >
-              <div style={{ background: '#0d2247' }} />
-              <div style={{ background: '#c8502a' }} />
-              <div style={{ background: '#1e6b4b' }} />
-              <div style={{ border: '1px solid #0d2247' }} />
-            </div>
+            <Logo size={22} />
 
             <span
               style={{
@@ -257,7 +241,7 @@ export default function DemoPresentationBar() {
                 textTransform: 'uppercase',
               }}
             >
-              [DEMO OS // V2.4]
+              Demo Showcase
             </span>
           </div>
 
@@ -270,7 +254,7 @@ export default function DemoPresentationBar() {
                 textTransform: 'uppercase',
               }}
             >
-              PERSONA:
+              Account:
             </span>
             <div
               style={{
@@ -325,7 +309,7 @@ export default function DemoPresentationBar() {
               marginRight: 2,
             }}
           >
-            SWITCH:
+            Switch:
           </span>
 
           {DEMO_MERCHANTS.slice(0, 4).map((m) => {
@@ -500,7 +484,7 @@ export default function DemoPresentationBar() {
                     borderRadius: 1,
                   }}
                 />
-                <span>{isPaying ? 'SETTLING...' : 'PAY & SETTLE'}</span>
+                <span>{isPaying ? 'Settling...' : 'Pay & Settle'}</span>
               </button>
             </div>
           ) : (
@@ -519,7 +503,7 @@ export default function DemoPresentationBar() {
               }}
             >
               <CheckCircle2 size={12} />
-              <span>BOOKS CLEAR (0 DUE)</span>
+              <span>All Clear (₹0 Due)</span>
             </div>
           )}
 
@@ -545,7 +529,7 @@ export default function DemoPresentationBar() {
             title="Compare Wholesaler and Retailer accounts side-by-side"
           >
             <Eye size={12} />
-            <span>DUAL PERSPECTIVE</span>
+            <span>Compare Accounts</span>
           </button>
         </div>
       </div>
@@ -599,7 +583,7 @@ export default function DemoPresentationBar() {
                     letterSpacing: '0.08em',
                   }}
                 >
-                  [SPEC-02 // DUAL-LEDGER SYNCHRONIZATION]
+                  Dual-Ledger Sync
                 </div>
                 <h2
                   style={{
@@ -614,10 +598,10 @@ export default function DemoPresentationBar() {
                   }}
                 >
                   <Users size={18} color="#0d2247" />
-                  <span>Dual Account Perspective: Wholesaler vs. Retailer</span>
+                  <span>Dual Account View: Wholesaler vs. Retailer</span>
                 </h2>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', marginTop: 4 }}>
-                  Demonstrate to faculty how both books synchronize across isolated accounts in real time.
+                  See how transactions synchronize between merchant accounts in real-time.
                 </p>
               </div>
 
@@ -868,7 +852,7 @@ export default function DemoPresentationBar() {
               }}
             >
               <strong style={{ color: '#0d2247' }}>[PRESENTATION NOTE]:</strong>{' '}
-              CreditFlow maintains double-entry network integrity across isolated accounts. When Retailer_B clicks &quot;PAY & SETTLE&quot;, state updates in MongoDB with optimistic version locking, and the Network Graph dynamically recalculates obligations.
+              CreditFlow maintains double-entry network integrity across isolated accounts. When Retailer_B clicks &quot;Pay & Settle&quot;, state updates in MongoDB with optimistic version locking, and the Network Graph dynamically recalculates obligations.
             </div>
           </div>
         </div>

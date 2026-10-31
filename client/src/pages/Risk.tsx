@@ -184,11 +184,11 @@ export default function Risk() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24, flexWrap: "wrap", gap: 16 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-            <h1 style={{ fontSize: "var(--font-size-2xl)", fontWeight: 800 }}>Risk Intelligence &amp; Cascade Radar</h1>
+            <h1 style={{ fontSize: "var(--font-size-2xl)", fontWeight: 800 }}>Credit Risk Analysis</h1>
             <Badge variant="muted">Slice C · v2</Badge>
           </div>
           <p style={{ color: "var(--text-muted)" }}>
-            Poisson default modeling, one-proportion hypothesis z-tests, Pearson correlation, and systemic contagion simulation.
+            Evaluate counterparty credit risk and default probability across your merchant group.
           </p>
         </div>
 

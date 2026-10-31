@@ -212,12 +212,12 @@ export default function Ledger() {
               </span>
             ) : (
               <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 12, background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>
-                Ego-network
+                My Debts
               </span>
             )}
           </div>
           <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-size-sm)' }}>
-            Peer-to-peer receivables and payables, optimistic version locking, counterparty approvals, and click-through transaction logs.
+            Track your receivables, payables, and transactions with merchants in your group.
           </p>
         </div>
 

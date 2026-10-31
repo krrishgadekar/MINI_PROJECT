@@ -1,7 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 /* =========================================================================
-   CreditFlow Design System — Clean, Modern & Premium
+   CreditFlow Design System â€” Clean, Modern & Premium
    ========================================================================= */
 
 /* ---------------------------------------------------------------------------
@@ -9,11 +9,11 @@
    --------------------------------------------------------------------------- */
 :root {
   /* Backgrounds */
-  --bg-primary: #f8f9fb;
-  --bg-secondary: #f0f2f5;
-  --bg-tertiary: #e4e7ec;
-  --bg-elevated: #ffffff;
-  --bg-card: #ffffff;
+  --bg-primary: #f7f4f0;
+  --bg-secondary: #efebe6;
+  --bg-tertiary: #e4dfd8;
+  --bg-elevated: #fffdf9;
+  --bg-card: #fffdf9;
 
   /* Brand Colors */
   --brand-navy: #0d2247;
@@ -66,10 +66,10 @@
   --text-bright: #000000;
 
   /* Borders */
-  --border-primary: #e5e7eb;
-  --border-secondary: #e5e7eb;
-  --border-glass: #e5e7eb;
-  --border-draft: #e5e7eb;
+  --border-primary: #e2ddd6;
+  --border-secondary: #e2ddd6;
+  --border-glass: #e2ddd6;
+  --border-draft: #e2ddd6;
   --border-glow: rgba(13, 34, 71, 0.15);
 
   /* Shadows */
@@ -150,6 +150,8 @@ html {
 body {
   font-family: var(--font-family);
   background-color: var(--bg-primary);
+  background-image: radial-gradient(circle, #d5d0c9 1px, transparent 1px);
+  background-size: 24px 24px;
   color: var(--text-primary);
   line-height: 1.6;
   min-height: 100vh;
@@ -183,7 +185,7 @@ a:hover {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #d1d5db;
+  background: #d5d0c9;
   border-radius: 3px;
 }
 
@@ -224,7 +226,7 @@ a:hover {
 
 .glass-card:hover,
 .card:hover {
-  border-color: #d1d5db;
+  border-color: #d5d0c8;
   box-shadow: var(--shadow-md);
 }
 
@@ -365,7 +367,7 @@ a:hover {
 .sidebar-footer {
   padding: 14px 16px;
   border-top: 1px solid var(--border-primary);
-  background: #fafbfc;
+  background: #f8f5f0;
 }
 
 .sidebar-user {
@@ -460,7 +462,7 @@ a:hover {
 }
 
 .stat-card:hover {
-  border-color: #d1d5db;
+  border-color: #d5d0c8;
   transform: translateY(-1px);
   box-shadow: var(--shadow-md);
 }
@@ -659,7 +661,7 @@ a:hover {
 
 .btn-secondary:hover {
   background: var(--bg-secondary);
-  border-color: #d1d5db;
+  border-color: #d5d0c8;
 }
 
 .btn-danger {
@@ -732,7 +734,7 @@ textarea::placeholder {
   border-radius: var(--border-radius);
   overflow: hidden;
   border: 1px solid var(--border-primary);
-  background: #fafbfc;
+  background: #f8f5f0;
   position: relative;
   box-shadow: var(--shadow-card);
 }
@@ -988,7 +990,7 @@ textarea::placeholder {
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  background: linear-gradient(135deg, #f8f9fb 0%, #eef1f6 100%);
+  background: linear-gradient(135deg, #f7f4f0 0%, #ede8e0 100%);
   position: relative;
   overflow: hidden;
   padding: 20px;

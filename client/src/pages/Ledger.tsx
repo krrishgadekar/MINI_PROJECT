@@ -50,6 +50,16 @@ export default function Ledger() {
 
   const sortParam = `${sortField}:${sortOrder}`;
 
+  // Fetch active group detail to ensure domain is always up to date
+  const { data: groupDetailData } = useQuery({
+    queryKey: queryKeys.groups.detail(activeGroupId || ''),
+    queryFn: () => api.groups.get(activeGroupId!),
+    enabled: Boolean(activeGroupId),
+    staleTime: 60 * 1000,
+  });
+  const groupDomain = activeGroup?.domain || groupDetailData?.group?.domain || 'none';
+  const isTaxGroup = groupDomain !== 'none';
+
   // Fetch debts via React Query
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.debts.list({
@@ -491,22 +501,40 @@ export default function Ledger() {
             <table className="data-table" aria-label="Debt obligations ledger">
               <thead>
                 <tr>
-                  <th style={{ width: '22%' }} scope="col">Debtor (Payer)</th>
-                  <th style={{ width: '22%' }} scope="col">Creditor (Payee)</th>
+                  <th style={{ width: isTaxGroup ? '18%' : '22%' }} scope="col">Debtor (Payer)</th>
+                  <th style={{ width: isTaxGroup ? '18%' : '22%' }} scope="col">Creditor (Payee)</th>
+                  {isTaxGroup ? (
+                    <>
+                      <th style={{ width: '12%' }} scope="col">Base</th>
+                      <th style={{ width: '15%' }} scope="col">Tax</th>
+                      <th
+                        style={{ width: '15%', cursor: 'pointer' }}
+                        onClick={() => handleSort('amount')}
+                        scope="col"
+                        aria-sort={sortField === 'amount' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}
+                      >
+                        <button style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', font: 'inherit' }} aria-label="Sort by payable amount">
+                          Payable
+                          <ArrowUpDown size={13} aria-hidden="true" />
+                        </button>
+                      </th>
+                    </>
+                  ) : (
+                    <th
+                      style={{ width: '18%', cursor: 'pointer' }}
+                      onClick={() => handleSort('amount')}
+                      scope="col"
+                      aria-sort={sortField === 'amount' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}
+                    >
+                      <button style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', font: 'inherit' }} aria-label="Sort by amount">
+                        Remaining / Original
+                        <ArrowUpDown size={13} aria-hidden="true" />
+                      </button>
+                    </th>
+                  )}
+                  <th style={{ width: isTaxGroup ? '12%' : '15%' }} scope="col">Status</th>
                   <th
-                    style={{ width: '18%', cursor: 'pointer' }}
-                    onClick={() => handleSort('amount')}
-                    scope="col"
-                    aria-sort={sortField === 'amount' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}
-                  >
-                    <button style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', font: 'inherit' }} aria-label="Sort by amount">
-                      Remaining / Original
-                      <ArrowUpDown size={13} aria-hidden="true" />
-                    </button>
-                  </th>
-                  <th style={{ width: '15%' }} scope="col">Status</th>
-                  <th
-                    style={{ width: '15%', cursor: 'pointer' }}
+                    style={{ width: isTaxGroup ? '12%' : '15%', cursor: 'pointer' }}
                     onClick={() => handleSort('dueDate')}
                     scope="col"
                     aria-sort={sortField === 'dueDate' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}
@@ -516,7 +544,7 @@ export default function Ledger() {
                       <ArrowUpDown size={13} aria-hidden="true" />
                     </button>
                   </th>
-                  <th style={{ width: '8%', textAlign: 'right' }} scope="col">Action</th>
+                  <th style={{ width: isTaxGroup ? '8%' : '8%', textAlign: 'right' }} scope="col">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -559,18 +587,77 @@ export default function Ledger() {
                           </span>
                         </div>
                       </td>
-                      <td>
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          <span style={{ fontWeight: 700, fontSize: 14 }}>
-                            ₹{debt.amount.toLocaleString('en-IN')}
-                          </span>
-                          {debt.originalAmount && debt.originalAmount !== debt.amount && (
-                            <span style={{ fontSize: 11, color: 'var(--text-muted)', textDecoration: 'line-through' }}>
-                              ₹{debt.originalAmount.toLocaleString('en-IN')}
+                      {isTaxGroup ? (
+                        <>
+                          {/* Base Column */}
+                          <td>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              <span style={{ fontWeight: 600, fontSize: 13 }}>
+                                ₹{(debt.baseAmount ?? debt.amount).toLocaleString('en-IN')}
+                              </span>
+                            </div>
+                          </td>
+                          {/* Tax Column with sign and tax type badge */}
+                          <td>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                              <span
+                                style={{
+                                  fontWeight: 600,
+                                  fontSize: 13,
+                                  color: debt.taxEffect === 'deduct' ? '#10b981' : '#3b82f6',
+                                }}
+                              >
+                                {debt.taxEffect === 'deduct' ? '-' : '+'}₹{(debt.taxAmount ?? 0).toLocaleString('en-IN')}
+                              </span>
+                              {debt.taxType && (
+                                <span
+                                  className="tax-type-badge"
+                                  style={{
+                                    fontSize: 10,
+                                    fontWeight: 600,
+                                    padding: '1px 6px',
+                                    borderRadius: 4,
+                                    background: debt.taxEffect === 'deduct' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(59, 130, 246, 0.12)',
+                                    color: debt.taxEffect === 'deduct' ? '#10b981' : '#3b82f6',
+                                    border: `1px solid ${debt.taxEffect === 'deduct' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(59, 130, 246, 0.3)'}`,
+                                    width: 'fit-content',
+                                    textTransform: 'uppercase',
+                                  }}
+                                >
+                                  {debt.taxType}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          {/* Payable Column (value old Amount column showed) */}
+                          <td>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              <span style={{ fontWeight: 700, fontSize: 14 }}>
+                                ₹{debt.amount.toLocaleString('en-IN')}
+                              </span>
+                              {debt.originalAmount && debt.originalAmount !== debt.amount && (
+                                <span style={{ fontSize: 11, color: 'var(--text-muted)', textDecoration: 'line-through' }}>
+                                  ₹{debt.originalAmount.toLocaleString('en-IN')}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                        </>
+                      ) : (
+                        /* Old Amount column for 'none' groups untouched */
+                        <td>
+                          <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ fontWeight: 700, fontSize: 14 }}>
+                              ₹{debt.amount.toLocaleString('en-IN')}
                             </span>
-                          )}
-                        </div>
-                      </td>
+                            {debt.originalAmount && debt.originalAmount !== debt.amount && (
+                              <span style={{ fontSize: 11, color: 'var(--text-muted)', textDecoration: 'line-through' }}>
+                                ₹{debt.originalAmount.toLocaleString('en-IN')}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      )}
                       <td>{getStatusBadge(debt)}</td>
                       <td>
                         {debt.dueDate ? (

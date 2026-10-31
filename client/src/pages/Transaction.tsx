@@ -5,6 +5,7 @@ import { api, queryKeys } from '../api';
 import { useAuth } from '../state/AuthProvider';
 import { useGroup } from '../state/GroupProvider';
 import { Modal, useToast, Skeleton, Badge, ConfirmDialog } from '../components/ui';
+import { TaxBreakupCard, EditTaxModal } from '../components/tax';
 import { setSimulate409, getSimulate409 } from '../api/mock/debts.mock';
 import type { Debt, Payment, AuditEntry, PaymentKind } from '../types';
 import {
@@ -19,6 +20,7 @@ import {
   FileText,
   AlertTriangle,
   History,
+  Edit2,
 } from 'lucide-react';
 
 interface TimelineEvent {
@@ -45,6 +47,7 @@ export default function Transaction() {
   const [isDisputeModalOpen, setIsDisputeModalOpen] = useState(false);
   const [isSettleConfirmOpen, setIsSettleConfirmOpen] = useState(false);
   const [isRejectConfirmOpen, setIsRejectConfirmOpen] = useState(false);
+  const [isEditTaxModalOpen, setIsEditTaxModalOpen] = useState(false);
 
   // Payment form state
   const [paymentAmount, setPaymentAmount] = useState('');
@@ -103,11 +106,17 @@ export default function Transaction() {
     ? Math.max(1, Math.ceil((Date.now() - dueDateObj.getTime()) / (1000 * 60 * 60 * 24)))
     : 0;
 
-  // Progress metrics
-  const original = debt?.originalAmount || debt?.amount || 0;
+  // Payable & Progress metrics (Requirement 3: partial-payment progress bar now based on payable)
+  const payable = debt?.originalAmount || debt?.amount || 0;
   const remaining = debt?.amount ?? 0;
-  const paid = Math.max(0, original - remaining);
-  const percentPaid = original > 0 ? Math.min(100, Math.round((paid / original) * 100)) : 0;
+  const paid = Math.max(0, payable - remaining);
+  const percentPaid = payable > 0 ? Math.min(100, Math.round((paid / payable) * 100)) : 0;
+  const original = payable;
+
+  // Editable tax condition: allowed while active/pending and no payments recorded yet (D2-C & §3)
+  const isDebtEditable =
+    Boolean(debt && (debt.status === 'active' || debt.status === 'pending') && payments.length === 0);
+  const isTaxDebt = Boolean(debt?.taxType || (debt?.taxBreakup && debt.taxBreakup.length > 0));
 
   // Merge payments and audit entries chronologically
   const timeline: TimelineEvent[] = useMemo(() => {
@@ -392,11 +401,18 @@ export default function Transaction() {
 
           {/* Amount Badge */}
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Remaining Debt</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              {isTaxDebt ? 'Remaining Payable' : 'Remaining Debt'}
+            </div>
             <div style={{ fontSize: 28, fontWeight: 800, color: debt.status === 'settled' ? 'var(--text-muted)' : 'var(--text-primary)' }}>
               ₹{debt.amount.toLocaleString('en-IN')}
             </div>
-            {original !== debt.amount && (
+            {isTaxDebt && debt.baseAmount !== undefined && (
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                Base: ₹{debt.baseAmount.toLocaleString('en-IN')}
+              </div>
+            )}
+            {!isTaxDebt && original !== debt.amount && (
               <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                 Original: ₹{original.toLocaleString('en-IN')}
               </div>
@@ -404,11 +420,11 @@ export default function Transaction() {
           </div>
         </div>
 
-        {/* Repayment Progress Bar */}
+        {/* Repayment Progress Bar (now based on payable) */}
         <div style={{ marginTop: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
             <span>
-              Repayment Progress: <strong>{percentPaid}%</strong> (₹{paid.toLocaleString('en-IN')} paid)
+              Repayment Progress: <strong>{percentPaid}%</strong> (₹{paid.toLocaleString('en-IN')} paid of ₹{payable.toLocaleString('en-IN')} payable)
             </span>
             <span>₹{remaining.toLocaleString('en-IN')} balance</span>
           </div>
@@ -432,6 +448,16 @@ export default function Transaction() {
             />
           </div>
         </div>
+
+        {/* Tax Breakup Card under the amounts (§3) */}
+        {isTaxDebt && (
+          <TaxBreakupCard
+            debt={debt}
+            isEditable={isDebtEditable}
+            onEditTax={() => setIsEditTaxModalOpen(true)}
+            style={{ marginTop: 20 }}
+          />
+        )}
 
         {/* Counterparties & Maturity Banner */}
         <div
@@ -653,6 +679,18 @@ export default function Transaction() {
 
                 {isCounterparty || isAdmin ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {isDebtEditable && isTaxDebt && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => setIsEditTaxModalOpen(true)}
+                        style={{ justifyContent: 'center' }}
+                        id="edit-tax-pending-btn"
+                      >
+                        <Edit2 size={16} />
+                        Edit Tax Details
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="btn btn-primary"
@@ -675,8 +713,22 @@ export default function Transaction() {
                     </button>
                   </div>
                 ) : (
-                  <div style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', padding: 8 }}>
-                    Awaiting confirmation by {debtorIdStr === currentUserId ? creditorName : debtorName}.
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {isDebtEditable && isTaxDebt && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => setIsEditTaxModalOpen(true)}
+                        style={{ justifyContent: 'center' }}
+                        id="edit-tax-pending-creator-btn"
+                      >
+                        <Edit2 size={16} />
+                        Edit Tax Details
+                      </button>
+                    )}
+                    <div style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', padding: 8 }}>
+                      Awaiting confirmation by {debtorIdStr === currentUserId ? creditorName : debtorName}.
+                    </div>
                   </div>
                 )}
               </div>
@@ -685,6 +737,18 @@ export default function Transaction() {
             {/* Active Debt Actions: Record Payment, Dispute, Force Settle */}
             {debt.status === 'active' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {isDebtEditable && isTaxDebt && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setIsEditTaxModalOpen(true)}
+                    style={{ justifyContent: 'center' }}
+                    id="edit-tax-active-btn"
+                  >
+                    <Edit2 size={16} />
+                    Edit Tax Details
+                  </button>
+                )}
                 <button
                   type="button"
                   className="btn btn-primary"
@@ -925,6 +989,19 @@ export default function Transaction() {
         onConfirm={handleSettle}
         onClose={() => setIsSettleConfirmOpen(false)}
       />
+      {/* Edit Tax Modal (§3) */}
+      {isTaxDebt && (
+        <EditTaxModal
+          isOpen={isEditTaxModalOpen}
+          onClose={() => setIsEditTaxModalOpen(false)}
+          debt={debt}
+          domain={activeGroup?.domain}
+          onSuccess={() => {
+            refetch();
+            queryClient.invalidateQueries({ queryKey: queryKeys.debts.all });
+          }}
+        />
+      )}
     </div>
   );
 }

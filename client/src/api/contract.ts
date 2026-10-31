@@ -259,7 +259,10 @@ export interface CreateDebtRequest {
 }
 
 export interface UpdateDebtRequest {
-  amount: number;
+  amount?: number;
+  baseAmount?: number;
+  taxType?: string;
+  taxInputs?: Record<string, any>;
   expectedVersion?: number;
 }
 

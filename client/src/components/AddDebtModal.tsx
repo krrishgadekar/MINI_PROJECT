@@ -345,8 +345,7 @@ export default function AddDebtModal({ isOpen, onClose, onSuccess }: AddDebtModa
             value={selectedMerchantId}
             onChange={(e) => setSelectedMerchantId(e.target.value)}
             required
-            size={Math.min(4, Math.max(2, filteredMembers.length))}
-            style={{ width: '100%', height: 'auto', padding: 6 }}
+            style={{ width: '100%', padding: '10px 12px' }}
           >
             {filteredMembers.map((m) => (
               <option key={m.id} value={m.id} style={{ padding: '8px 10px' }}>
@@ -592,8 +591,24 @@ export default function AddDebtModal({ isOpen, onClose, onSuccess }: AddDebtModa
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
+        {/* Action Buttons — Sticky footer so submit button is always visible */}
+        <div
+          style={{
+            position: 'sticky',
+            bottom: -24,
+            marginLeft: -24,
+            marginRight: -24,
+            marginBottom: -24,
+            padding: '16px 24px',
+            background: 'var(--bg-elevated)',
+            borderTop: '1px solid var(--border-primary)',
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: 12,
+            zIndex: 20,
+            boxShadow: '0 -4px 12px rgba(0, 0, 0, 0.08)',
+          }}
+        >
           <button type="button" className="btn btn-secondary" onClick={onClose} disabled={isSubmitting}>
             Cancel
           </button>

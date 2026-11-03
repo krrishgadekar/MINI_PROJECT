@@ -807,10 +807,11 @@ textarea::placeholder {
   background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(4px);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   z-index: 1000;
-  padding: 20px;
+  padding: 40px 20px;
+  overflow-y: auto;
   animation: fadeIn 0.2s ease-out;
 }
 
@@ -821,7 +822,11 @@ textarea::placeholder {
   box-shadow: var(--shadow-lg);
   width: 100%;
   max-width: 580px;
+  max-height: calc(100vh - 80px);
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .ui-modal-header {
@@ -841,6 +846,9 @@ textarea::placeholder {
 .ui-modal-body {
   padding: 24px;
   color: var(--text-secondary);
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .ui-modal-footer {

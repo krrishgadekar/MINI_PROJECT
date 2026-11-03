@@ -27,13 +27,12 @@ services:
       - key: AUTO_SEED
         value: "true"
       - key: JWT_ACCESS_SECRET
-        generateValue: true
+        value: creditflow_super_secret_access_key_2026
       - key: JWT_REFRESH_SECRET
-        generateValue: true
+        value: creditflow_super_secret_refresh_key_2026
       - key: MONGO_URI
         sync: false
       - key: PYTHON_ENGINE_URL
         sync: false
       - key: CLIENT_ORIGINS
         value: "*"
-

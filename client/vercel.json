@@ -1,9 +1,16 @@
 {
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/api/:path(.*)",
+      "destination": "https://creditflow-server.onrender.com/api/:path"
+    },
+    {
+      "source": "/socket.io/:path(.*)",
+      "destination": "https://creditflow-server.onrender.com/socket.io/:path"
+    },
+    {
+      "source": "/((?!api|socket\\.io).*)",
       "destination": "/index.html"
     }
   ]
 }
-
